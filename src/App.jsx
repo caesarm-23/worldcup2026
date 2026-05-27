@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
-const SUPABASE_URL  = const SUPABASE_URL =
-https://wapvjbfuwbcxgowhzsbd.supabase.co;
-const SUPABASE_KEY  = const SUPABASE_KEY = sb_publishable_bMKF8MRT-hdsDz-GL0CnPA_H1s_gpSk;
+const SUPABASE_URL  = "https://wapvjbfuwbcxgowhzsbd.supabase.co";
+const SUPABASE_KEY  = "sb_publishable_bMKF8MRT-hdsDz-GL0CnPA_H1s_gpSk";
 
 const sb = (path, opts = {}) =>
   fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
