@@ -3,8 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
 // Replace these two values with your own from Supabase → Settings → API
 
-const SUPABASE_URL = "https://wapvjbfuwbcxgowhzsbd.supabase.co";
-const SUPABASE_KEY = "sb_publishable_bMKF8MRT-hdsDz-GL0CnPA_H1s_gpSk";
+const SUPABASE_URL  = "https://wapvjbfuwbcxgowhzsbd.supabase.co";
+const SUPABASE_KEY  = "sb_publishable_bMKF8MRT-hdsDz-GL0CnPA_H1s_gpSk";
 
 const sb = (path, opts = {}) =>
   fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -276,9 +276,11 @@ function GroupPicker({ picks, onChange }) {
                 borderRadius:7, padding:"7px 9px"
               }}>
                 <Dot team={team}/>
-                <span style={{ flex:1, fontSize:12, color:"#ddd", fontWeight:600,
-                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{team}</span>
-                <ConfBadge team={team}/>
+                <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", gap:2 }}>
+                  <span style={{ fontSize:12, color:"#ddd", fontWeight:600,
+                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{team}</span>
+                  <ConfBadge team={team}/>
+                </div>
                 <div style={{ display:"flex", gap:3, marginLeft:4 }}>
                   {[1,2,3,4].map(r => <button key={r} onClick={() => handleRank(team,r)} style={{
                     width:22, height:22, borderRadius:4, border:"none", cursor:"pointer",
