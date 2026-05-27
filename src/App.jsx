@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
-// Replace these two values with your own from Supabase → Settings → API
-
-const SUPABASE_URL  = "https://wapvjbfuwbcxgowhzsbd.supabase.co";
-const SUPABASE_KEY  = "sb_publishable_bMKF8MRT-hdsDz-GL0CnPA_H1s_gpSk";
+const SUPABASE_URL  = "const SUPABASE_URL =
+https://wapvjbfuwbcxgowhzsbd.supabase.co";
+const SUPABASE_KEY  = "const SUPABASE_KEY = sb_publishable_bMKF8MRT-hdsDz-GL0CnPA_H1s_gpSk";
 
 const sb = (path, opts = {}) =>
   fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -17,7 +16,7 @@ const sb = (path, opts = {}) =>
     ...opts,
   }).then(r => r.json());
 
-// ─── STORAGE LAYER (Supabase) ─────────────────────────────────────────────────
+// ─── STORAGE ──────────────────────────────────────────────────────────────────
 
 async function saveEntry(name, picks) {
   await sb("picks", {
@@ -44,20 +43,22 @@ async function loadMyEntry(name) {
 
 async function getAdminState() {
   const rows = await sb("admin_state?id=eq.1&select=phase,actual_advancers,actual_ff");
-  return Array.isArray(rows) && rows[0] ? {
+  if (!Array.isArray(rows) || !rows[0]) return null;
+  return {
     phase: rows[0].phase,
     actualAdvancers: rows[0].actual_advancers,
     actualFF: rows[0].actual_ff,
-  } : null;
+  };
 }
 
-async function saveAdminState(phase, actualAdvancers, actualFF) {
+async function saveAdminState(phase, actualAdvancers, actualFF, liveStandings) {
   await sb("admin_state?id=eq.1", {
     method: "PATCH",
     body: JSON.stringify({
       phase,
       actual_advancers: actualAdvancers || null,
       actual_ff: actualFF || null,
+      live_standings: liveStandings || null,
     }),
     headers: {
       apikey: SUPABASE_KEY,
@@ -68,21 +69,32 @@ async function saveAdminState(phase, actualAdvancers, actualFF) {
   });
 }
 
+async function getFullAdminState() {
+  const rows = await sb("admin_state?id=eq.1&select=phase,actual_advancers,actual_ff,live_standings");
+  if (!Array.isArray(rows) || !rows[0]) return null;
+  return {
+    phase: rows[0].phase,
+    actualAdvancers: rows[0].actual_advancers,
+    actualFF: rows[0].actual_ff,
+    liveStandings: rows[0].live_standings,
+  };
+}
+
 // ─── DATA ─────────────────────────────────────────────────────────────────────
 
 const GROUPS = [
-  { id:"A", teams:["Mexico",     "South Korea",  "South Africa",        "Czechia"] },
-  { id:"B", teams:["Canada",     "Switzerland",  "Qatar",               "Bosnia & Herzegovina"] },
-  { id:"C", teams:["Brazil",     "Morocco",      "Scotland",            "Haiti"] },
-  { id:"D", teams:["USA",        "Paraguay",     "Australia",           "Turkey"] },
-  { id:"E", teams:["Germany",    "Ecuador",      "Ivory Coast",         "Curaçao"] },
-  { id:"F", teams:["Netherlands","Japan",        "Tunisia",             "Sweden"] },
-  { id:"G", teams:["Belgium",    "Iran",         "Egypt",               "New Zealand"] },
-  { id:"H", teams:["Spain",      "Uruguay",      "Saudi Arabia",        "Cape Verde"] },
-  { id:"I", teams:["France",     "Senegal",      "Norway",              "Iraq"] },
-  { id:"J", teams:["Argentina",  "Austria",      "Algeria",             "Jordan"] },
-  { id:"K", teams:["Portugal",   "Colombia",     "Uzbekistan",          "DR Congo"] },
-  { id:"L", teams:["England",    "Croatia",      "Panama",              "Ghana"] },
+  { id:"A", teams:["Mexico",     "South Korea",  "South Africa", "Czechia"] },
+  { id:"B", teams:["Canada",     "Switzerland",  "Qatar",        "Bosnia & Herzegovina"] },
+  { id:"C", teams:["Brazil",     "Morocco",      "Scotland",     "Haiti"] },
+  { id:"D", teams:["USA",        "Paraguay",     "Australia",    "Turkey"] },
+  { id:"E", teams:["Germany",    "Ecuador",      "Ivory Coast",  "Curaçao"] },
+  { id:"F", teams:["Netherlands","Japan",        "Tunisia",      "Sweden"] },
+  { id:"G", teams:["Belgium",    "Iran",         "Egypt",        "New Zealand"] },
+  { id:"H", teams:["Spain",      "Uruguay",      "Saudi Arabia", "Cape Verde"] },
+  { id:"I", teams:["France",     "Senegal",      "Norway",       "Iraq"] },
+  { id:"J", teams:["Argentina",  "Austria",      "Algeria",      "Jordan"] },
+  { id:"K", teams:["Portugal",   "Colombia",     "Uzbekistan",   "DR Congo"] },
+  { id:"L", teams:["England",    "Croatia",      "Panama",       "Ghana"] },
 ];
 
 const ALL_TEAMS = GROUPS.flatMap(g => g.teams);
@@ -141,20 +153,45 @@ const GOLD="#FFD700", DARK="#0a0a1a", CARD="rgba(255,255,255,0.05)", BORDER="rgb
 
 // ─── SCORING ──────────────────────────────────────────────────────────────────
 
-function calcScore(picks, actualAdvancers, actualFF) {
-  let g=0, k=0, f=0;
-  Object.values(picks.groups||{}).forEach(r => g += GROUP_POINTS[r]||0);
-  Object.entries(picks.knockout||{}).forEach(([rnd,teams]) => {
-    (teams||[]).forEach(team => {
+// Live group score: compare user picks against current real standings
+function calcLiveGroupScore(groupPicks, liveStandings) {
+  if (!liveStandings || Object.keys(liveStandings).length === 0) return null;
+  let pts = 0;
+  Object.entries(groupPicks || {}).forEach(([team, predicted]) => {
+    const actual = liveStandings[team];
+    if (actual && actual === predicted) pts += GROUP_POINTS[predicted] || 0;
+  });
+  return pts;
+}
+
+// Max possible group score (all picks correct)
+function calcMaxGroupScore(groupPicks) {
+  return Object.values(groupPicks || {}).reduce((s, r) => s + (GROUP_POINTS[r] || 0), 0);
+}
+
+function calcScore(picks, actualAdvancers, actualFF, liveStandings) {
+  // Group stage
+  const liveG = calcLiveGroupScore(picks.groups, liveStandings);
+  const maxG  = calcMaxGroupScore(picks.groups);
+  const g     = liveG !== null ? liveG : maxG; // use live if available, else max
+
+  // Knockout
+  let k = 0;
+  Object.entries(picks.knockout || {}).forEach(([rnd, teams]) => {
+    (teams || []).forEach(team => {
       const pool = actualAdvancers?.[rnd];
-      k += pool ? (pool.includes(team) ? KO_POINTS[rnd]||0 : 0) : KO_POINTS[rnd]||0;
+      k += pool ? (pool.includes(team) ? KO_POINTS[rnd] || 0 : 0) : KO_POINTS[rnd] || 0;
     });
   });
-  Object.entries(picks.finalFour||{}).forEach(([place,team]) => {
+
+  // Final Four
+  let f = 0;
+  Object.entries(picks.finalFour || {}).forEach(([place, team]) => {
     const actual = actualFF?.[parseInt(place)];
-    f += actual ? (actual===team ? FF_POINTS[parseInt(place)]||0 : 0) : FF_POINTS[parseInt(place)]||0;
+    f += actual ? (actual === team ? FF_POINTS[parseInt(place)] || 0 : 0) : FF_POINTS[parseInt(place)] || 0;
   });
-  return { g, k, f, total: g+k+f };
+
+  return { g, maxG, liveG, k, f, total: g + k + f, maxTotal: maxG + k + f };
 }
 
 // ─── SMALL COMPONENTS ─────────────────────────────────────────────────────────
@@ -235,7 +272,7 @@ function ConfChart() {
 
 // ─── GROUP PICKER ─────────────────────────────────────────────────────────────
 
-function GroupPicker({ picks, onChange }) {
+function GroupPicker({ picks, onChange, liveStandings }) {
   const handleRank = (team, rank) => {
     const group = GROUPS.find(g => g.teams.includes(team));
     if (!group) return;
@@ -245,8 +282,12 @@ function GroupPicker({ picks, onChange }) {
     onChange(next);
   };
   const done = GROUPS.filter(g => g.teams.every(t => picks[t])).length;
+  const hasLive = liveStandings && Object.keys(liveStandings).length > 0;
 
   return <div>
+    {hasLive && <InfoBox color="#4caf50">
+      <strong style={{ color:"#4caf50" }}>🔴 Live Standings Active</strong> — Green highlights show where your prediction matches the current real standings. Scores update after each matchday.
+    </InfoBox>}
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
       <div style={{ color:"#aaa", fontSize:12 }}>Rank each team 1–4 in their group</div>
       <div style={{ color:done===12?"#4caf50":GOLD, fontWeight:800, fontSize:13 }}>{done}/12 groups done</div>
@@ -269,28 +310,35 @@ function GroupPicker({ picks, onChange }) {
           <div style={{ padding:"8px 10px", display:"flex", flexDirection:"column", gap:5 }}>
             {group.teams.map(team => {
               const rank = picks[team];
+              const liveRank = liveStandings?.[team];
+              const isCorrect = rank && liveRank && rank === liveRank;
+              const isWrong   = rank && liveRank && rank !== liveRank;
               return <div key={team} style={{
                 display:"flex", alignItems:"center", gap:7,
-                background:rank?"rgba(255,255,255,0.07)":"rgba(255,255,255,0.03)",
-                border:rank?"1px solid rgba(255,215,0,0.3)":`1px solid ${BORDER}`,
+                background: isCorrect?"rgba(76,175,80,0.12)":isWrong?"rgba(255,80,80,0.07)":rank?"rgba(255,255,255,0.07)":"rgba(255,255,255,0.03)",
+                border: isCorrect?"1px solid rgba(76,175,80,0.4)":isWrong?"1px solid rgba(255,80,80,0.2)":rank?"1px solid rgba(255,215,0,0.3)":`1px solid ${BORDER}`,
                 borderRadius:7, padding:"7px 9px"
               }}>
                 <Dot team={team}/>
                 <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", gap:2 }}>
                   <span style={{ fontSize:12, color:"#ddd", fontWeight:600,
                     whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{team}</span>
-                  <ConfBadge team={team}/>
+                  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <ConfBadge team={team}/>
+                    {liveRank && <span style={{ fontSize:8, color:"#888" }}>real: #{liveRank}</span>}
+                  </div>
                 </div>
-                <div style={{ display:"flex", gap:3, marginLeft:4 }}>
+                <div style={{ display:"flex", gap:3 }}>
                   {[1,2,3,4].map(r => <button key={r} onClick={() => handleRank(team,r)} style={{
                     width:22, height:22, borderRadius:4, border:"none", cursor:"pointer",
                     background:rank===r?(r<=2?"#FFD700":r===3?"#7c6fc4":"#555"):"rgba(255,255,255,0.1)",
                     color:rank===r?(r<=2?"#000":"#fff"):"#666", fontSize:10, fontWeight:800, transition:"all 0.15s"
                   }}>{r}</button>)}
                 </div>
-                {rank && <span style={{ background:rank<=2?GOLD:"#444", color:rank<=2?"#000":"#ccc",
+                {rank && <span style={{ background: isCorrect?"#4caf50":rank<=2?GOLD:"#444",
+                  color: isCorrect?"#fff":rank<=2?"#000":"#ccc",
                   borderRadius:4, padding:"1px 5px", fontSize:10, fontWeight:800, flexShrink:0 }}>
-                  +{GROUP_POINTS[rank]}
+                  {isCorrect?"✓":""} +{GROUP_POINTS[rank]}
                 </span>}
               </div>;
             })}
@@ -414,11 +462,12 @@ function FinalFourPicker({ actualFF, ffPicks, onChange }) {
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
 
-function Leaderboard({ entries, myName, actualAdvancers, actualFF }) {
-  const scored = [...entries]
-    .map(e => ({ ...e, score: calcScore(e.picks, actualAdvancers, actualFF) }))
-    .sort((a,b) => b.score.total - a.score.total);
-  const hasReal = !!(actualAdvancers || actualFF);
+function Leaderboard({ entries, myName, actualAdvancers, actualFF, liveStandings }) {
+  const hasLive = liveStandings && Object.keys(liveStandings).length > 0;
+
+  const scored = [...entries].map(e => ({
+    ...e, score: calcScore(e.picks, actualAdvancers, actualFF, liveStandings)
+  })).sort((a,b) => b.score.total - a.score.total);
 
   if (scored.length===0) return <div style={{ textAlign:"center", padding:"48px 0", color:"#555" }}>
     No submissions yet — be the first!
@@ -427,10 +476,10 @@ function Leaderboard({ entries, myName, actualAdvancers, actualFF }) {
   return <div>
     <div style={{ color:"#555", fontSize:11, marginBottom:12, textAlign:"center" }}>
       {scored.length} submission{scored.length!==1?"s":""} ·{" "}
-      {hasReal ? "📊 Live scoring active" : "⚡ Showing max possible points"}
+      {hasLive ? "🔴 Live scoring active — updates after each matchday" : "⚡ Max possible points shown — live scoring starts when games begin"}
     </div>
     {scored.map((entry,i) => {
-      const { g,k,f,total } = entry.score;
+      const { g, maxG, liveG, k, f, total, maxTotal } = entry.score;
       const isMe = entry.name===myName;
       return <div key={entry.name} style={{
         background:isMe?"rgba(255,215,0,0.07)":CARD,
@@ -446,16 +495,27 @@ function Leaderboard({ entries, myName, actualAdvancers, actualFF }) {
             {entry.name} {isMe&&<span style={{ fontSize:10, color:"#888" }}>(you)</span>}
           </div>
           <div style={{ display:"flex", gap:10, marginTop:3, flexWrap:"wrap" }}>
-            {[{l:"Groups",v:g,c:"#4caf50"},{l:"Knockout",v:k,c:"#2196f3"},{l:"Final 4",v:f,c:"#9c27b0"}].map(s =>
-              <span key={s.l} style={{ fontSize:10, color:"#666" }}>
-                <span style={{ color:s.c, fontWeight:700 }}>{s.v}</span> {s.l}
-              </span>
-            )}
+            <span style={{ fontSize:10, color:"#666" }}>
+              <span style={{ color:"#4caf50", fontWeight:700 }}>{g}</span>
+              {hasLive && liveG !== null && <span style={{ color:"#444" }}>/{maxG}</span>}
+              {" "}Groups
+            </span>
+            <span style={{ fontSize:10, color:"#666" }}>
+              <span style={{ color:"#2196f3", fontWeight:700 }}>{k}</span> Knockout
+            </span>
+            <span style={{ fontSize:10, color:"#666" }}>
+              <span style={{ color:"#9c27b0", fontWeight:700 }}>{f}</span> Final 4
+            </span>
+            {hasLive && <span style={{ fontSize:10, color:"#555" }}>
+              max: <span style={{ color:"#555", fontWeight:700 }}>{maxTotal}</span>
+            </span>}
           </div>
         </div>
         <div style={{ textAlign:"right", flexShrink:0 }}>
           <div style={{ fontSize:20, fontWeight:900, color:isMe?GOLD:"#fff" }}>{total}</div>
-          <div style={{ fontSize:9, color:"#555", textTransform:"uppercase" }}>pts</div>
+          <div style={{ fontSize:9, color:"#555", textTransform:"uppercase" }}>
+            {hasLive ? "live pts" : "max pts"}
+          </div>
         </div>
       </div>;
     })}
@@ -464,24 +524,42 @@ function Leaderboard({ entries, myName, actualAdvancers, actualFF }) {
 
 // ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
 
-function AdminPanel({ phase, actualAdvancers, actualFF, onUpdate }) {
+function AdminPanel({ phase, actualAdvancers, actualFF, liveStandings, onUpdate }) {
   const [pass,setPass]   = useState("");
   const [auth,setAuth]   = useState(false);
   const [msg,setMsg]     = useState("");
   const [r32,setR32]     = useState(actualAdvancers?.r32||[]);
   const [ff,setFF]       = useState(actualFF||[]);
   const [saving,setSaving] = useState(false);
+  // Live standings draft: { teamName: rank }
+  const [liveDraft, setLiveDraft] = useState(liveStandings || {});
 
   const flash = m => { setMsg(m); setTimeout(()=>setMsg(""),3000); };
 
-  const save = async (newPhase) => {
+  const save = async (newPhase, newLive) => {
     setSaving(true);
     const adv = newPhase>=2 ? { r32 } : actualAdvancers;
     const finalFour = newPhase>=3 ? ff : actualFF;
-    await saveAdminState(newPhase, adv, finalFour);
-    onUpdate({ phase:newPhase, actualAdvancers:adv, actualFF:finalFour });
-    flash(`✓ Phase ${newPhase} saved!`);
+    const standings = newLive !== undefined ? newLive : liveDraft;
+    await saveAdminState(newPhase, adv, finalFour, standings);
+    onUpdate({ phase:newPhase, actualAdvancers:adv, actualFF:finalFour, liveStandings:standings });
+    flash("✓ Saved!");
     setSaving(false);
+  };
+
+  const handleLiveRank = (team, rank) => {
+    const group = GROUPS.find(g => g.teams.includes(team));
+    if (!group) return;
+    const next = { ...liveDraft };
+    // Remove conflict in same group
+    group.teams.forEach(t => { if (next[t]===rank && t!==team) delete next[t]; });
+    if (next[team]===rank) delete next[team]; else next[team]=rank;
+    setLiveDraft(next);
+  };
+
+  const clearLive = async () => {
+    setLiveDraft({});
+    await save(phase, {});
   };
 
   if (!auth) return <div style={{ maxWidth:340, margin:"40px auto", textAlign:"center" }}>
@@ -499,12 +577,15 @@ function AdminPanel({ phase, actualAdvancers, actualFF, onUpdate }) {
     {msg&&<div style={{ color:"#f44", fontSize:11, marginTop:8 }}>{msg}</div>}
   </div>;
 
+  const liveCount = Object.keys(liveDraft).length;
+
   return <div>
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
       <div style={{ color:GOLD, fontWeight:800, fontSize:14 }}>⚙️ Admin Panel</div>
       {msg&&<div style={{ color:"#4caf50", fontSize:12, fontWeight:700 }}>{msg}</div>}
     </div>
 
+    {/* Phase switcher */}
     <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
       <div style={{ color:"#777", fontWeight:700, fontSize:11, marginBottom:10, textTransform:"uppercase", letterSpacing:"0.5px" }}>Tournament Phase</div>
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -521,6 +602,57 @@ function AdminPanel({ phase, actualAdvancers, actualFF, onUpdate }) {
       </div>
     </div>
 
+    {/* ── LIVE GROUP STANDINGS ── */}
+    <div style={{ background:CARD, border:"1px solid rgba(76,175,80,0.3)", borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+        <div>
+          <div style={{ color:"#4caf50", fontWeight:800, fontSize:13 }}>🔴 Live Group Standings</div>
+          <div style={{ color:"#555", fontSize:10, marginTop:2 }}>Update after each matchday — scores recalculate instantly for all players</div>
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          <Btn onClick={() => save(phase)} bg="#4caf50" color="#fff" disabled={saving} style={{ padding:"6px 12px", fontSize:11 }}>
+            {saving?"Saving...":"Save Standings"}
+          </Btn>
+          <Btn onClick={clearLive} bg="#333" color="#aaa" style={{ padding:"6px 12px", fontSize:11 }}>
+            Clear
+          </Btn>
+        </div>
+      </div>
+      <div style={{ color:"#555", fontSize:10, marginBottom:12 }}>
+        {liveCount} of 48 teams ranked · Rank 1–4 per group to reflect current real standings
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:10 }}>
+        {GROUPS.map(group => (
+          <div key={group.id} style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+              <div style={{ background:"#4caf50", color:"#000", width:22, height:22, borderRadius:"50%",
+                display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:11 }}>
+                {group.id}
+              </div>
+              <span style={{ color:"#666", fontSize:10 }}>
+                {group.teams.filter(t=>liveDraft[t]).length}/4 set
+              </span>
+            </div>
+            {group.teams.map(team => {
+              const rank = liveDraft[team];
+              return <div key={team} style={{ display:"flex", alignItems:"center", gap:5, marginBottom:4 }}>
+                <Dot team={team} size={7}/>
+                <span style={{ flex:1, fontSize:11, color:"#bbb", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{team}</span>
+                <div style={{ display:"flex", gap:2 }}>
+                  {[1,2,3,4].map(r => <button key={r} onClick={() => handleLiveRank(team,r)} style={{
+                    width:20, height:20, borderRadius:3, border:"none", cursor:"pointer",
+                    background:rank===r?(r<=2?"#4caf50":r===3?"#7c6fc4":"#555"):"rgba(255,255,255,0.08)",
+                    color:rank===r?"#fff":"#555", fontSize:9, fontWeight:800
+                  }}>{r}</button>)}
+                </div>
+              </div>;
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* R32 */}
     <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:"14px 16px", marginBottom:14 }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div style={{ color:"#aaa", fontWeight:700, fontSize:12 }}>
@@ -546,6 +678,7 @@ function AdminPanel({ phase, actualAdvancers, actualFF, onUpdate }) {
       {r32.length!==32&&<div style={{ color:"#444", fontSize:10, marginTop:8 }}>Select exactly 32 teams ({r32.length} selected)</div>}
     </div>
 
+    {/* Final Four */}
     <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:"14px 16px" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div style={{ color:"#aaa", fontWeight:700, fontSize:12 }}>
@@ -587,14 +720,16 @@ export default function App() {
   const [phase,setPhase]       = useState(1);
   const [actualAdvancers,setActualAdvancers] = useState(null);
   const [actualFF,setActualFF] = useState(null);
+  const [liveStandings,setLiveStandings] = useState(null);
   const [picks,setPicks]       = useState({ groups:{}, knockout:{}, finalFour:{} });
 
   const loadAdmin = useCallback(async () => {
-    const s = await getAdminState();
+    const s = await getFullAdminState();
     if (s) {
-      if (s.phase)           setPhase(s.phase);
-      if (s.actualAdvancers) setActualAdvancers(s.actualAdvancers);
-      if (s.actualFF)        setActualFF(s.actualFF);
+      if (s.phase != null)        setPhase(s.phase);
+      if (s.actualAdvancers)      setActualAdvancers(s.actualAdvancers);
+      if (s.actualFF)             setActualFF(s.actualFF);
+      if (s.liveStandings)        setLiveStandings(s.liveStandings);
     }
   }, []);
 
@@ -623,16 +758,17 @@ export default function App() {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const handleAdminUpdate = ({ phase:p, actualAdvancers:a, actualFF:f }) => {
+  const handleAdminUpdate = ({ phase:p, actualAdvancers:a, actualFF:f, liveStandings:l }) => {
     if (p != null) setPhase(p);
     if (a != null) setActualAdvancers(a);
     if (f != null) setActualFF(f);
+    if (l !== undefined) setLiveStandings(l);
   };
 
-  const { total } = calcScore(picks, actualAdvancers, actualFF);
+  const score = calcScore(picks, actualAdvancers, actualFF, liveStandings);
+  const hasLive = liveStandings && Object.keys(liveStandings).length > 0;
   const groupsDone = GROUPS.filter(g => g.teams.every(t => picks.groups[t])).length;
 
-  // ── LOGIN ──
   if (screen==="login") return (
     <div style={{ minHeight:"100vh", background:`linear-gradient(135deg,${DARK},#0d1b2a)`,
       display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
@@ -662,7 +798,6 @@ export default function App() {
     </div>
   );
 
-  // ── MAIN ──
   const tabs = [
     { key:"groups",     label:`Groups ${groupsDone===12?"✓":"("+groupsDone+"/12)"}` },
     { key:"knockout",   label:`Knockout${phase<2?" 🔒":""}` },
@@ -684,12 +819,18 @@ export default function App() {
               <span style={{ color:["","#4caf50","#2196f3","#9c27b0"][phase] }}>
                 {["","Phase 1: Groups","Phase 2: Knockout","Phase 3: Final Four"][phase]}
               </span>
+              {hasLive && <span style={{ color:"#4caf50" }}> · 🔴 Live</span>}
             </div>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <div style={{ textAlign:"right" }}>
-              <div style={{ fontSize:19, fontWeight:900, color:GOLD }}>{total}</div>
-              <div style={{ fontSize:9, color:"#444", textTransform:"uppercase" }}>pts</div>
+              <div style={{ fontSize:19, fontWeight:900, color:GOLD }}>{score.total}</div>
+              <div style={{ fontSize:9, color:"#444", textTransform:"uppercase" }}>
+                {hasLive ? "live pts" : "max pts"}
+              </div>
+              {hasLive && score.maxTotal !== score.total && (
+                <div style={{ fontSize:9, color:"#444" }}>max {score.maxTotal}</div>
+              )}
             </div>
             <Btn onClick={handleSave} disabled={saving}
               bg={saved?"#4caf50":GOLD} color={saved?"#fff":"#000"}>
@@ -705,7 +846,7 @@ export default function App() {
 
           {tab==="groups" && <>
             <ConfChart/>
-            <GroupPicker picks={picks.groups} onChange={g => setPicks(p=>({...p,groups:g}))}/>
+            <GroupPicker picks={picks.groups} onChange={g => setPicks(p=>({...p,groups:g}))} liveStandings={liveStandings}/>
           </>}
 
           {tab==="knockout" && (phase<2
@@ -724,12 +865,12 @@ export default function App() {
 
           {tab==="leaderboard" && (
             <Leaderboard entries={entries} myName={name}
-              actualAdvancers={actualAdvancers} actualFF={actualFF}/>
+              actualAdvancers={actualAdvancers} actualFF={actualFF} liveStandings={liveStandings}/>
           )}
 
           {tab==="admin" && (
             <AdminPanel phase={phase} actualAdvancers={actualAdvancers}
-              actualFF={actualFF} onUpdate={handleAdminUpdate}/>
+              actualFF={actualFF} liveStandings={liveStandings} onUpdate={handleAdminUpdate}/>
           )}
 
         </div>
