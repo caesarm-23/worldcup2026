@@ -901,11 +901,7 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-function SectionTitle({ children }) {
-  return <div style={{
-    fontSize:11, fontWeight:800, textTransform:"uppercase",
-    letterSpacing:"1px", color:G4, marginBottom:10
-  }}>{children}</div>;
+}>{children}</div>;
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
