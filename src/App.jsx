@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
-const SUPABASE_URL  = "YOUR_SUPABASE_URL";
-const SUPABASE_KEY  = "YOUR_SUPABASE_ANON_KEY";
+const SUPABASE_URL  = "https://wapvjbfuwbcxgowhzsbd.supabase.co";
+const SUPABASE_KEY  = "sb_publishable_bMKF8MRT-hdsDz-GL0CnPA_H1s_gpSk";
 
 const sb = (path, opts = {}) =>
   fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -901,7 +901,171 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-}>{children}</div>;
+// ─── ADMIN PREDICTIONS VIEW ───────────────────────────────────────────────────
+
+function AdminPredictions({ entries, actualAdvancers, actualFF, liveStandings }) {
+  const [auth, setAuth]   = useState(false);
+  const [pass, setPass]   = useState("");
+  const [msg,  setMsg]    = useState("");
+  const [selected, setSelected] = useState(null);
+
+  const scored = [...entries]
+    .map(e => ({ ...e, score: calcScore(e.picks, actualAdvancers, actualFF, liveStandings) }))
+    .sort((a,b) => b.score.total - a.score.total);
+
+  const hasLive = liveStandings && Object.keys(liveStandings).length > 0;
+
+  if (!auth) return <div style={{ maxWidth:340, margin:"40px auto", textAlign:"center" }}>
+    <div style={{ fontSize:26, marginBottom:8 }}>👁️</div>
+    <div style={{ color:"rgba(255,255,255,0.6)", fontSize:13, marginBottom:16 }}>Admin access required to view all predictions</div>
+    <input value={pass} onChange={e=>setPass(e.target.value)} type="password"
+      onKeyDown={e=>e.key==="Enter"&&pass===ADMIN_PASS&&setAuth(true)}
+      placeholder="Password..."
+      style={{ width:"100%", padding:"11px 13px", borderRadius:8, border:`1px solid ${BORDER}`,
+        background:"rgba(0,0,0,0.3)", color:WHT, fontSize:14,
+        outline:"none", boxSizing:"border-box", marginBottom:10, fontFamily:"inherit" }}/>
+    <Btn onClick={()=>{ if(pass===ADMIN_PASS) setAuth(true); else setMsg("Wrong password"); }} style={{ width:"100%" }}>
+      Unlock
+    </Btn>
+    {msg && <div style={{ color:"#ff6b6b", fontSize:11, marginTop:8 }}>{msg}</div>}
+  </div>;
+
+  if (selected) {
+    const entry = entries.find(e => e.name === selected);
+    if (!entry) return null;
+    const p = entry.picks;
+    return <div>
+      <button onClick={()=>setSelected(null)} style={{
+        background:"none", border:`1px solid ${BORDER}`, borderRadius:8,
+        color:"rgba(255,255,255,0.6)", padding:"7px 14px", cursor:"pointer",
+        fontSize:12, marginBottom:16, fontFamily:"inherit"
+      }}>← Back to all players</button>
+
+      <div style={{ color:G4, fontWeight:900, fontSize:18, marginBottom:16 }}>{entry.name}'s Predictions</div>
+
+      {/* Group picks */}
+      <SectionTitle>Group Stage Rankings</SectionTitle>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:10, marginBottom:20 }}>
+        {GROUPS.map(group => {
+          const ranked = group.teams.map(t => ({ team:t, rank:p.groups?.[t] })).filter(x=>x.rank).sort((a,b)=>a.rank-b.rank);
+          const unranked = group.teams.filter(t => !p.groups?.[t]);
+          return <div key={group.id} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, overflow:"hidden" }}>
+            <div style={{ background:G2, padding:"6px 10px", display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ background:WHT, color:G2, width:20, height:20, borderRadius:"50%",
+                display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:11 }}>{group.id}</div>
+              <span style={{ color:"rgba(255,255,255,0.6)", fontSize:10 }}>{ranked.length}/4 ranked</span>
+            </div>
+            <div style={{ padding:"6px 8px" }}>
+              {ranked.map(({ team, rank }) => {
+                const liveRank = liveStandings?.[team];
+                const correct = liveRank && liveRank === rank;
+                return <div key={team} style={{ display:"flex", alignItems:"center", gap:6, padding:"3px 0" }}>
+                  <span style={{
+                    background: rank<=2?G4:rank===3?"#7c6fc4":"#555",
+                    color:WHT, width:18, height:18, borderRadius:4,
+                    display:"inline-flex", alignItems:"center", justifyContent:"center",
+                    fontSize:10, fontWeight:800, flexShrink:0
+                  }}>{rank}</span>
+                  <Dot team={team} size={7}/>
+                  <span style={{ fontSize:11, color: correct?"#a5d6a7":WHT, flex:1 }}>{team}</span>
+                  {correct && <span style={{ fontSize:9, color:G4 }}>✓</span>}
+                </div>;
+              })}
+              {unranked.map(t => <div key={t} style={{ display:"flex", alignItems:"center", gap:6, padding:"3px 0", opacity:0.3 }}>
+                <span style={{ width:18, height:18, borderRadius:4, background:"rgba(255,255,255,0.1)",
+                  display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:10 }}>?</span>
+                <Dot team={t} size={7}/><span style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>{t}</span>
+              </div>)}
+            </div>
+          </div>;
+        })}
+      </div>
+
+      {/* Knockout picks */}
+      <SectionTitle>Knockout Picks</SectionTitle>
+      <div style={{ marginBottom:20 }}>
+        {KO_ROUNDS.map(round => {
+          const teams = p.knockout?.[round.key] || [];
+          return <div key={round.key} style={{ marginBottom:10 }}>
+            <div style={{ color:"rgba(255,255,255,0.5)", fontSize:11, marginBottom:4 }}>{round.label}</div>
+            {teams.length === 0
+              ? <span style={{ color:"rgba(255,255,255,0.2)", fontSize:11 }}>No picks yet</span>
+              : <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+                  {teams.map(t => <span key={t} style={{
+                    background:"rgba(0,166,81,0.15)", border:`1px solid ${G4}44`,
+                    borderRadius:6, padding:"4px 8px", fontSize:11, color:WHT,
+                    display:"flex", alignItems:"center", gap:4
+                  }}><Dot team={t} size={7}/>{t}</span>)}
+                </div>
+            }
+          </div>;
+        })}
+      </div>
+
+      {/* Final Four */}
+      <SectionTitle>Final Four Placement</SectionTitle>
+      {Object.keys(p.finalFour || {}).length === 0
+        ? <span style={{ color:"rgba(255,255,255,0.2)", fontSize:11 }}>No picks yet</span>
+        : <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {[1,2,3,4].map(place => {
+              const team = p.finalFour?.[place];
+              const labels = {1:"🥇 Champion",2:"🥈 Runner-Up",3:"🥉 3rd Place",4:"4th Place"};
+              return <div key={place} style={{ display:"flex", alignItems:"center", gap:10,
+                background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 12px" }}>
+                <span style={{ color:"rgba(255,255,255,0.5)", fontSize:11, width:100 }}>{labels[place]}</span>
+                {team ? <><Dot team={team}/><span style={{ fontSize:12, color:WHT }}>{team}</span></> 
+                      : <span style={{ color:"rgba(255,255,255,0.2)", fontSize:11 }}>Not picked</span>}
+              </div>;
+            })}
+          </div>
+      }
+    </div>;
+  }
+
+  // ── PLAYER LIST ──
+  return <div>
+    <div style={{ color:"rgba(255,255,255,0.5)", fontSize:11, marginBottom:14 }}>
+      Click any player to see their full predictions
+    </div>
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      {scored.map((entry, i) => {
+        const { g, k, f, total } = entry.score;
+        const groupsDoneCount = GROUPS.filter(gr => gr.teams.every(t => entry.picks.groups?.[t])).length;
+        const medals = ["🥇","🥈","🥉"];
+        return <button key={entry.name} onClick={()=>setSelected(entry.name)} style={{
+          background:CARD, border:`1px solid ${BORDER}`, borderRadius:10,
+          padding:"12px 16px", cursor:"pointer", textAlign:"left",
+          display:"flex", alignItems:"center", gap:12, fontFamily:"inherit",
+          transition:"all 0.15s"
+        }}>
+          <div style={{ fontSize:16, width:26, textAlign:"center", flexShrink:0 }}>
+            {i<3?medals[i]:<span style={{ color:"rgba(255,255,255,0.3)", fontSize:12 }}>#{i+1}</span>}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:800, fontSize:13, color:WHT }}>{entry.name}</div>
+            <div style={{ display:"flex", gap:10, marginTop:3, flexWrap:"wrap" }}>
+              <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>
+                <span style={{ color:G4 }}>{groupsDoneCount}/12</span> groups done
+              </span>
+              <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>
+                <span style={{ color:"#64b5f6" }}>{(entry.picks.knockout?.final||[]).length}</span>/2 finalists picked
+              </span>
+              <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>
+                <span style={{ color:"#ce93d8" }}>{Object.keys(entry.picks.finalFour||{}).length}</span>/4 Final 4 placed
+              </span>
+            </div>
+          </div>
+          <div style={{ textAlign:"right", flexShrink:0 }}>
+            <div style={{ fontSize:18, fontWeight:900, color:G4 }}>{total}</div>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textTransform:"uppercase" }}>
+              {hasLive?"live":"max"} pts
+            </div>
+          </div>
+          <div style={{ color:"rgba(255,255,255,0.2)", fontSize:14 }}>›</div>
+        </button>;
+      })}
+    </div>
+  </div>;
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
@@ -965,11 +1129,12 @@ export default function App() {
   if (screen === "login") return <LoginScreen onLogin={handleLogin}/>;
 
   const tabs = [
-    { key:"groups",     label:`Groups ${groupsDone===12?"✓":"("+groupsDone+"/12)"}` },
-    { key:"knockout",   label:`Knockout${phase<2?" 🔒":""}` },
-    { key:"finalfour",  label:`Final 4${phase<3?" 🔒":""}` },
-    { key:"leaderboard",label:`🏅 (${entries.length})` },
-    { key:"admin",      label:"⚙️" },
+    { key:"groups",      label:`Groups ${groupsDone===12?"✓":"("+groupsDone+"/12)"}` },
+    { key:"knockout",    label:`Knockout${phase<2?" 🔒":""}` },
+    { key:"finalfour",   label:`Final 4${phase<3?" 🔒":""}` },
+    { key:"leaderboard", label:`🏅 (${entries.length})` },
+    { key:"predictions", label:"👁️" },
+    { key:"admin",       label:"⚙️" },
   ];
 
   return (
@@ -1050,6 +1215,12 @@ export default function App() {
               liveStandings={liveStandings}/>
           )}
 
+          {tab==="predictions" && (
+            <AdminPredictions entries={entries}
+              actualAdvancers={actualAdvancers} actualFF={actualFF}
+              liveStandings={liveStandings}/>
+          )}
+
           {tab==="admin" && (
             <AdminPanel phase={phase} actualAdvancers={actualAdvancers}
               actualFF={actualFF} liveStandings={liveStandings}
@@ -1058,7 +1229,7 @@ export default function App() {
 
         </div>
 
-        {tab!=="leaderboard" && tab!=="admin" && (
+        {tab!=="leaderboard" && tab!=="admin" && tab!=="predictions" && (
           <div style={{ marginTop:24, display:"flex", justifyContent:"center" }}>
             <Btn onClick={handleSave} disabled={saving}
               bg={saved?"#2e7d32":G4} color={WHT} style={{ minWidth:180, padding:"12px" }}>
