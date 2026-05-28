@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
-const SUPABASE_URL  = "https://wapvjbfuwbcxgowhzsbd.supabase.co";
-const SUPABASE_KEY  = "sb_publishable_bMKF8MRT-hdsDz-GL0CnPA_H1s_gpSk";
+const SUPABASE_URL  = "YOUR_SUPABASE_URL";
+const SUPABASE_KEY  = "YOUR_SUPABASE_ANON_KEY";
 
 const sb = (path, opts = {}) =>
   fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -899,6 +899,13 @@ function LoginScreen({ onLogin }) {
       </div>
     </div>
   );
+}
+
+function SectionTitle({ children }) {
+  return <div style={{
+    fontSize:11, fontWeight:800, textTransform:"uppercase",
+    letterSpacing:"1px", color:G4, marginBottom:10
+  }}>{children}</div>;
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
