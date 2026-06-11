@@ -1169,7 +1169,19 @@ async function saveBets(bets) {
   });
 }
 
-async function loadBets() {
+async function checkIsLocked() {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/admin_state?id=eq.1&select=locks`, {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const rows = await r.json();
+    return rows?.[0]?.locks?.groups === true;
+  } catch { return false; }
+}
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/admin_state?id=eq.1&select=bets`, {
       headers: {
@@ -1724,19 +1736,18 @@ function LoginScreen({ onLogin }) {
   const handleName = async () => {
     if (!nameInput.trim()) return;
     setLoading(true); setError("");
-    // Check locks from server
-    const adminState = await getFullAdminState();
-    const locked = adminState?.locks?.groups || false;
+    // Check lock state directly
+    const locked = await checkIsLocked();
     const entry = await loadMyEntry(nameInput.trim());
     setExisting(entry);
     setIsLocked(locked);
-    // If locked and new user — block them
+    // If locked and new user — block immediately
     if (locked && !entry) {
-      setError("Picks are locked — the tournament has started. Contact the league admin.");
+      setError("Registration is closed — the tournament has started. Contact the league admin if you have an existing account.");
       setLoading(false);
       return;
     }
-    setStep(entry?"pin-return":"pin-new");
+    setStep(entry ? "pin-return" : "pin-new");
     setLoading(false);
   };
 
