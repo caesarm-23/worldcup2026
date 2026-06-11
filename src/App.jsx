@@ -4,16 +4,22 @@ import { useState, useEffect, useCallback } from "react";
 const SUPABASE_URL  = "https://wapvjbfuwbcxgowhzsbd.supabase.co";
 const SUPABASE_KEY  = "sb_publishable_bMKF8MRT-hdsDz-GL0CnPA_H1s_gpSk";
 
-const sb = (path, opts = {}) =>
-  fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+const sb = (path, opts = {}) => {
+  const isWrite = opts.method && opts.method !== "GET";
+  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
       "Content-Type": "application/json",
-      Prefer: "return=representation",
+      ...(isWrite ? { Prefer: "return=representation" } : {}),
     },
     ...opts,
-  }).then(r => r.json());
+  }).then(async r => {
+    const data = await r.json();
+    if (!r.ok) { console.error("Supabase error:", r.status, data); return null; }
+    return data;
+  });
+};
 
 // ─── STORAGE ──────────────────────────────────────────────────────────────────
 
@@ -57,7 +63,7 @@ async function loadMyEntry(name) {
 
 async function getFullAdminState() {
   const rows = await sb("admin_state?id=eq.1&select=phase,actual_ff,live_standings,locks,bracket,bets");
-  if (!Array.isArray(rows) || !rows[0]) return null;
+  if (!rows || !Array.isArray(rows) || !rows[0]) return null;
   return {
     phase:         rows[0].phase,
     actualFF:      rows[0].actual_ff,
@@ -1426,6 +1432,13 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, 
   );
   const [bracketState,setBracketState] = useState(bracket||null);
 
+  // Keep liveDraft in sync when liveStandings prop updates from polling
+  useEffect(()=>{
+    if(liveStandings && Object.keys(liveStandings).length > 0) {
+      setLiveDraft(liveStandings);
+    }
+  }, [liveStandings]);
+
   const flash = m => { setMsg(m); setTimeout(()=>setMsg(""),3000); };
 
   const save = async (updates) => {
@@ -1913,12 +1926,13 @@ export default function App() {
 
   const handleAdminUpdate = (updates) => {
     // Apply locally immediately for instant feedback
-    if(updates.phase!=null)         setPhase(updates.phase);
-    if(updates.actualFF!=null)      setActualFF(updates.actualFF);
-    if(updates.liveStandings!=null) setLiveStandings(updates.liveStandings);
-    if(updates.locks!=null)         setLocks(updates.locks);
-    if(updates.bracket!=null)       setBracket(updates.bracket);
-    // Then reload from server to confirm sync
+    if(updates.phase!=null)                                        setPhase(updates.phase);
+    if(updates.actualFF!=null)                                     setActualFF(updates.actualFF);
+    if(updates.liveStandings!=null &&
+       Object.keys(updates.liveStandings||{}).length > 0)         setLiveStandings(updates.liveStandings);
+    if(updates.locks!=null)                                        setLocks(updates.locks);
+    if(updates.bracket!=null)                                      setBracket(updates.bracket);
+    // Reload from server after 1 second to confirm sync
     setTimeout(()=>loadAdmin(), 1000);
   };
 
