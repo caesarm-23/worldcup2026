@@ -1169,7 +1169,15 @@ async function saveBets(bets) {
   });
 }
 
+// ─── TOURNAMENT LOCK ─────────────────────────────────────────────────────────
+// Set this to true to lock new registrations and group stage edits
+// This is a server-side constant — change it here and redeploy to enforce
+const REGISTRATION_LOCKED = true;
+
 async function checkIsLocked() {
+  // First check the hardcoded constant — this can never fail silently
+  if (REGISTRATION_LOCKED) return true;
+  // Then check Supabase for dynamic override
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/admin_state?id=eq.1&select=locks`, {
       headers: {
@@ -1180,7 +1188,7 @@ async function checkIsLocked() {
     });
     const rows = await r.json();
     return rows?.[0]?.locks?.groups === true;
-  } catch { return false; }
+  } catch { return REGISTRATION_LOCKED; }
 }
 async function loadBets() {
   try {
