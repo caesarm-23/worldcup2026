@@ -1161,7 +1161,17 @@ function BetsTab({ entries, myName, bets, onBetsChange }) {
   const [playerA, setPlayerA]   = useState("");
   const [playerB, setPlayerB]   = useState("");
   const [stake, setStake]       = useState("");
-  const [userVotes, setUserVotes] = useState({});
+
+  // Poll every 15 seconds so all devices stay in sync
+  useEffect(() => {
+    const refresh = async () => {
+      const s = await getFullAdminState();
+      if (s?.bets) onBetsChange(s.bets);
+    };
+    refresh(); // load immediately on mount
+    const interval = setInterval(refresh, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const allBets = bets || [];
   const playerNames = entries.map(e=>e.name);
