@@ -35,13 +35,18 @@ async function loadAllEntries() {
   return Array.isArray(rows) ? rows.map(r => ({ name: r.name, picks: r.data })) : [];
 }
 
+async function loadAllEntriesWithPins() {
+  const rows = await sb("picks?select=name,pin,data");
+  return Array.isArray(rows) ? rows.map(r => ({ name: r.name, pin: r.pin, picks: r.data })) : [];
+}
+
 async function loadMyEntry(name) {
   const rows = await sb(`picks?name=eq.${encodeURIComponent(name)}&select=name,pin,data`);
   return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
 
 async function getFullAdminState() {
-  const rows = await sb("admin_state?id=eq.1&select=phase,actual_ff,live_standings,locks,bracket");
+  const rows = await sb("admin_state?id=eq.1&select=phase,actual_ff,live_standings,locks,bracket,bets");
   if (!Array.isArray(rows) || !rows[0]) return null;
   return {
     phase:         rows[0].phase,
@@ -49,6 +54,7 @@ async function getFullAdminState() {
     liveStandings: rows[0].live_standings,
     locks:         rows[0].locks || { groups: false, knockout: false },
     bracket:       rows[0].bracket || null,
+    bets:          rows[0].bets || [],
   };
 }
 
@@ -696,30 +702,149 @@ function FinalFourPicker({ actualFF, ffPicks, onChange, locked, bracket }) {
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
 
-function Leaderboard({ entries, myName, actualFF, liveStandings, bracket }) {
+function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks }) {
+  const [selected, setSelected] = useState(null);
   const hasLive = liveStandings && Object.keys(liveStandings).length>0;
+  const canViewPicks = locks?.groups; // picks visible once group stage is locked
+
   const scored = [...entries]
     .map(e => ({ ...e, score: calcScore(e.picks, actualFF, liveStandings, bracket) }))
     .sort((a,b) => b.score.total - a.score.total);
+
+  // ── Detail view ──
+  if (selected) {
+    const entry = entries.find(e=>e.name===selected);
+    if (!entry) { setSelected(null); return null; }
+    const p = entry.picks;
+    return <div>
+      <button onClick={()=>setSelected(null)} style={{ background:"none", border:`1px solid ${BORDER}`,
+        borderRadius:8, color:"rgba(255,255,255,0.6)", padding:"7px 14px",
+        cursor:"pointer", fontSize:12, marginBottom:16, fontFamily:"inherit" }}>← Back to Leaderboard</button>
+      <div style={{ color:G4, fontWeight:900, fontSize:20, marginBottom:4 }}>{entry.name}</div>
+      <div style={{ color:"rgba(255,255,255,0.4)", fontSize:11, marginBottom:20 }}>
+        Total: <strong style={{ color:G4 }}>{calcScore(p, actualFF, liveStandings, bracket).total} pts</strong>
+      </div>
+
+      <SectionTitle>Group Stage Rankings</SectionTitle>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:8, marginBottom:20 }}>
+        {GROUPS.map(group => {
+          const ranked=group.teams.map(t=>({team:t,rank:p.groups?.[t]})).filter(x=>x.rank).sort((a,b)=>a.rank-b.rank);
+          const unranked=group.teams.filter(t=>!p.groups?.[t]);
+          return <div key={group.id} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, overflow:"hidden" }}>
+            <div style={{ background:G2, padding:"5px 10px", display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ background:WHT, color:G2, width:18, height:18, borderRadius:"50%",
+                display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:10 }}>{group.id}</div>
+            </div>
+            <div style={{ padding:"5px 8px" }}>
+              {ranked.map(({ team, rank }) => {
+                const liveRank=liveStandings?.[team], correct=liveRank&&liveRank===rank;
+                return <div key={team} style={{ display:"flex", alignItems:"center", gap:5, padding:"2px 0" }}>
+                  <span style={{ background:rank<=2?G4:rank===3?"#7c6fc4":"#555", color:WHT,
+                    width:16, height:16, borderRadius:3, display:"inline-flex", alignItems:"center",
+                    justifyContent:"center", fontSize:9, fontWeight:800, flexShrink:0 }}>{rank}</span>
+                  <Dot team={team} size={7}/>
+                  <span style={{ fontSize:11, color:correct?"#a5d6a7":WHT, flex:1,
+                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{team}</span>
+                  {correct&&<span style={{ fontSize:9, color:G4 }}>✓</span>}
+                </div>;
+              })}
+              {unranked.map(t=><div key={t} style={{ display:"flex", alignItems:"center", gap:5, padding:"2px 0", opacity:0.3 }}>
+                <span style={{ width:16, height:16, borderRadius:3, background:"rgba(255,255,255,0.1)",
+                  display:"inline-flex", alignItems:"center", justifyContent:"center", fontSize:9 }}>?</span>
+                <Dot team={t} size={7}/><span style={{ fontSize:11 }}>{t}</span>
+              </div>)}
+            </div>
+          </div>;
+        })}
+      </div>
+
+      {bracket?.r32?.length>0 && <>
+        <SectionTitle>Knockout Bracket Picks</SectionTitle>
+        <div style={{ overflowX:"auto", paddingBottom:12, marginBottom:20 }}>
+          <div style={{ display:"flex", gap:12, minWidth:"max-content", alignItems:"flex-start" }}>
+            {BRACKET_ROUNDS.map(round => {
+              const roundPicks=p.bracket?.[round.key]||{};
+              const matches=bracket?.[round.key]||[];
+              if(!matches.some(m=>m.teamA||m.teamB)) return null;
+              const spacing=Math.pow(2,BRACKET_ROUNDS.findIndex(r=>r.key===round.key))*8;
+              return <div key={round.key} style={{ display:"flex", flexDirection:"column", gap:0, minWidth:180 }}>
+                <div style={{ background:G2, borderRadius:8, padding:"5px 10px", textAlign:"center",
+                  color:WHT, fontWeight:800, fontSize:11, marginBottom:spacing+4 }}>
+                  {round.label}
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:spacing>0?spacing:8 }}>
+                  {matches.map((match,mi)=>{
+                    const pick=roundPicks[mi];
+                    const {teamA,teamB,winner}=match;
+                    const teamRow=(team)=>{
+                      if(!team) return <div style={{ padding:"8px 10px", color:"rgba(255,255,255,0.2)", fontSize:11, fontStyle:"italic" }}>TBD</div>;
+                      const isPick=pick===team, isCorrect=isPick&&winner&&winner===team, isWrong=isPick&&winner&&winner!==team;
+                      return <div style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 10px",
+                        background:isCorrect?"rgba(0,166,81,0.2)":isWrong?"rgba(220,50,50,0.12)":isPick?"rgba(255,255,255,0.08)":"transparent",
+                        borderLeft:isPick?`3px solid ${isCorrect?G4:isWrong?"#ff5252":G4}`:"3px solid transparent" }}>
+                        <Dot team={team} size={8}/>
+                        <span style={{ flex:1, fontSize:11, fontWeight:isPick?700:400,
+                          color:winner===team?GLD:isWrong?"rgba(255,255,255,0.3)":WHT,
+                          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{team}</span>
+                        {isCorrect&&<span style={{ fontSize:9, color:G4 }}>✓</span>}
+                        {isWrong&&<span style={{ fontSize:9, color:"#ff5252" }}>✗</span>}
+                        {winner===team&&!isPick&&<span style={{ fontSize:9 }}>🏆</span>}
+                      </div>;
+                    };
+                    return <div key={mi} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:"hidden", minWidth:180 }}>
+                      {teamRow(teamA)}
+                      <div style={{ height:1, background:BORDER }}/>
+                      {teamRow(teamB)}
+                    </div>;
+                  })}
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>
+      </>}
+
+      {Object.keys(p.finalFour||{}).length>0 && <>
+        <SectionTitle>Final Four Picks</SectionTitle>
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {[1,2,3,4].map(place=>{
+            const team=p.finalFour?.[place];
+            const labels={1:"🥇 Champion",2:"🥈 Runner-Up",3:"🥉 3rd Place",4:"4th Place"};
+            return <div key={place} style={{ display:"flex", alignItems:"center", gap:10,
+              background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 12px" }}>
+              <span style={{ color:"rgba(255,255,255,0.5)", fontSize:11, width:110 }}>{labels[place]}</span>
+              {team?<><Dot team={team}/><span style={{ fontSize:12, color:WHT }}>{team}</span></>
+                  :<span style={{ color:"rgba(255,255,255,0.2)", fontSize:11 }}>Not picked</span>}
+            </div>;
+          })}
+        </div>
+      </>}
+    </div>;
+  }
 
   if (!scored.length) return <div style={{ textAlign:"center", padding:"48px 0",
     color:"rgba(255,255,255,0.3)" }}>No submissions yet — be the first!</div>;
 
   return <div>
     <div style={{ color:"rgba(255,255,255,0.4)", fontSize:11, marginBottom:14, textAlign:"center" }}>
-      {scored.length} submission{scored.length!==1?"s":""} ·{" "}
+      {scored.length} player{scored.length!==1?"s":""} ·{" "}
       {hasLive?"🔴 Live scoring active":"⚡ Max possible points shown"}
+      {canViewPicks && <span style={{ color:G4 }}> · Click any name to see their picks</span>}
     </div>
     {scored.map((entry,i) => {
       const { g, k, f, total } = entry.score;
       const isMe = entry.name===myName;
-      return <div key={entry.name} style={{
-        background:isMe?"rgba(0,166,81,0.15)":CARD,
-        border:isMe?`1px solid ${G4}`:`1px solid ${BORDER}`,
-        borderRadius:12, padding:"12px 16px", marginBottom:8,
-        display:"flex", alignItems:"center", gap:12,
-        boxShadow:isMe?"0 0 20px rgba(0,166,81,0.2)":"none"
-      }}>
+      return <div key={entry.name}
+        onClick={canViewPicks ? ()=>setSelected(entry.name) : undefined}
+        style={{
+          background:isMe?"rgba(0,166,81,0.15)":CARD,
+          border:isMe?`1px solid ${G4}`:`1px solid ${BORDER}`,
+          borderRadius:12, padding:"12px 16px", marginBottom:8,
+          display:"flex", alignItems:"center", gap:12,
+          boxShadow:isMe?"0 0 20px rgba(0,166,81,0.2)":"none",
+          cursor:canViewPicks?"pointer":"default",
+          transition:"opacity 0.15s"
+        }}>
         <div style={{ fontSize:18, width:28, textAlign:"center", flexShrink:0 }}>
           {["🥇","🥈","🥉"][i]||<span style={{ color:"rgba(255,255,255,0.3)", fontSize:12 }}>#{i+1}</span>}
         </div>
@@ -739,6 +864,7 @@ function Leaderboard({ entries, myName, actualFF, liveStandings, bracket }) {
           <div style={{ fontSize:22, fontWeight:900, color:isMe?G4:WHT }}>{total}</div>
           <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textTransform:"uppercase" }}>pts</div>
         </div>
+        {canViewPicks && <div style={{ color:"rgba(255,255,255,0.2)", fontSize:14 }}>›</div>}
       </div>;
     })}
   </div>;
@@ -827,12 +953,17 @@ function ScoringPanel({ phase }) {
 // ─── ADMIN PREDICTIONS ────────────────────────────────────────────────────────
 
 function AdminPredictions({ entries, actualFF, liveStandings, bracket, onDelete }) {
-  const [auth,setAuth]     = useState(false);
-  const [pass,setPass]     = useState("");
-  const [msg,setMsg]       = useState("");
+  const [auth,setAuth]         = useState(false);
+  const [pass,setPass]         = useState("");
+  const [msg,setMsg]           = useState("");
   const [selected,setSelected] = useState(null);
+  const [fullEntries,setFullEntries] = useState([]);
 
-  const scored = [...entries]
+  useEffect(()=>{
+    if(auth) loadAllEntriesWithPins().then(setFullEntries);
+  },[auth]);
+
+  const scored = [...(auth ? fullEntries : entries)]
     .map(e => ({ ...e, score: calcScore(e.picks, actualFF, liveStandings, bracket) }))
     .sort((a,b) => b.score.total - a.score.total);
 
@@ -981,7 +1112,13 @@ function AdminPredictions({ entries, actualFF, liveStandings, bracket, onDelete 
             {["🥇","🥈","🥉"][i]||<span style={{ color:"rgba(255,255,255,0.3)", fontSize:12 }}>#{i+1}</span>}
           </div>
           <div style={{ flex:1 }}>
-            <div style={{ fontWeight:800, fontSize:13, color:WHT }}>{entry.name}</div>
+            <div style={{ fontWeight:800, fontSize:13, color:WHT, display:"flex", alignItems:"center", gap:8 }}>
+              {entry.name}
+              {entry.pin && <span style={{ background:"rgba(255,215,0,0.15)", border:"1px solid rgba(255,215,0,0.3)",
+                borderRadius:6, padding:"1px 7px", fontSize:10, color:GLD, fontWeight:700, letterSpacing:"2px" }}>
+                PIN: {entry.pin}
+              </span>}
+            </div>
             <div style={{ display:"flex", gap:10, marginTop:3, flexWrap:"wrap" }}>
               <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}><span style={{ color:G4 }}>{gDone}/12</span> groups</span>
               <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}><span style={{ color:"#64b5f6" }}>{Object.keys(entry.picks.bracket?.r32||{}).length}</span> R32</span>
@@ -1005,7 +1142,211 @@ function AdminPredictions({ entries, actualFF, liveStandings, bracket, onDelete 
   </div>;
 }
 
-// ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
+// ─── BETS TAB ─────────────────────────────────────────────────────────────────
+
+async function saveBets(bets) {
+  await sb("admin_state?id=eq.1", {
+    method:"PATCH",
+    body:JSON.stringify({ bets }),
+    headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}`,
+      "Content-Type":"application/json", Prefer:"return=representation" },
+  });
+}
+
+function BetsTab({ entries, myName, bets, onBetsChange }) {
+  const [creating, setCreating] = useState(false);
+  const [betType, setBetType]   = useState("match"); // "match" | "leaderboard"
+  const [teamA, setTeamA]       = useState("");
+  const [teamB, setTeamB]       = useState("");
+  const [playerA, setPlayerA]   = useState("");
+  const [playerB, setPlayerB]   = useState("");
+  const [stake, setStake]       = useState("");
+  const [userVotes, setUserVotes] = useState({});
+
+  const allBets = bets || [];
+  const playerNames = entries.map(e=>e.name);
+
+  const handleCreate = async () => {
+    if (betType==="match" && (!teamA || !teamB || teamA===teamB)) return;
+    if (betType==="leaderboard" && (!playerA || !playerB || playerA===playerB)) return;
+    const newBet = {
+      id: Date.now(),
+      type: betType,
+      creator: myName,
+      stake: stake || "Bragging rights",
+      createdAt: new Date().toISOString(),
+      votes: {},
+      ...(betType==="match"
+        ? { teamA, teamB, label:`Who wins: ${teamA} vs ${teamB}` }
+        : { playerA, playerB, label:`Who places higher: ${playerA} vs ${playerB}` }
+      ),
+    };
+    const updated = [...allBets, newBet];
+    await saveBets(updated);
+    onBetsChange(updated);
+    setCreating(false);
+    setTeamA(""); setTeamB(""); setPlayerA(""); setPlayerB(""); setStake("");
+  };
+
+  const handleVote = async (betId, pick) => {
+    const updated = allBets.map(b => {
+      if (b.id !== betId) return b;
+      const votes = { ...(b.votes||{}), [myName]: pick };
+      return { ...b, votes };
+    });
+    await saveBets(updated);
+    onBetsChange(updated);
+  };
+
+  const selectStyle = { background:"rgba(0,0,0,0.4)", color:WHT, border:`1px solid ${BORDER}`,
+    borderRadius:8, padding:"9px 12px", fontSize:12, fontFamily:"inherit", width:"100%" };
+
+  return <div>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+      <div>
+        <div style={{ fontWeight:800, fontSize:16, color:WHT }}>🎲 Hypothetical Bets</div>
+        <div style={{ color:"rgba(255,255,255,0.4)", fontSize:11, marginTop:2 }}>
+          For fun only — no real money involved
+        </div>
+      </div>
+      <Btn onClick={()=>setCreating(c=>!c)} bg={creating?"rgba(255,255,255,0.1)":G4}
+        color={creating?"rgba(255,255,255,0.6)":WHT} style={{ padding:"8px 16px", fontSize:12 }}>
+        {creating?"Cancel":"+ Create Bet"}
+      </Btn>
+    </div>
+
+    {/* Create bet form */}
+    {creating && <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12,
+      padding:"16px", marginBottom:20 }}>
+      <SectionTitle>New Bet</SectionTitle>
+
+      {/* Type selector */}
+      <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+        {[{k:"match",l:"⚽ Winner of X vs X"},{k:"leaderboard",l:"🏆 Who places higher"}].map(({k,l})=>(
+          <button key={k} onClick={()=>setBetType(k)} style={{
+            flex:1, padding:"9px", borderRadius:8, border:`1px solid ${betType===k?G4:BORDER}`,
+            background:betType===k?"rgba(0,166,81,0.15)":"rgba(0,0,0,0.2)",
+            color:betType===k?G4:"rgba(255,255,255,0.5)", fontWeight:betType===k?800:400,
+            fontSize:12, cursor:"pointer", fontFamily:"inherit"
+          }}>{l}</button>
+        ))}
+      </div>
+
+      {betType==="match" && <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>
+        <div style={{ color:"rgba(255,255,255,0.5)", fontSize:11 }}>Select two teams</div>
+        <select value={teamA} onChange={e=>setTeamA(e.target.value)} style={selectStyle}>
+          <option value="">-- Team A --</option>
+          {ALL_TEAMS.map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+        <div style={{ textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>vs</div>
+        <select value={teamB} onChange={e=>setTeamB(e.target.value)} style={selectStyle}>
+          <option value="">-- Team B --</option>
+          {ALL_TEAMS.filter(t=>t!==teamA).map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>}
+
+      {betType==="leaderboard" && <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>
+        <div style={{ color:"rgba(255,255,255,0.5)", fontSize:11 }}>Select two players</div>
+        <select value={playerA} onChange={e=>setPlayerA(e.target.value)} style={selectStyle}>
+          <option value="">-- Player A --</option>
+          {playerNames.map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+        <div style={{ textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>vs</div>
+        <select value={playerB} onChange={e=>setPlayerB(e.target.value)} style={selectStyle}>
+          <option value="">-- Player B --</option>
+          {playerNames.filter(n=>n!==playerA).map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+      </div>}
+
+      <div style={{ marginBottom:12 }}>
+        <div style={{ color:"rgba(255,255,255,0.5)", fontSize:11, marginBottom:6 }}>Stakes (optional)</div>
+        <input value={stake} onChange={e=>setStake(e.target.value)}
+          placeholder="e.g. Loser buys drinks, Bragging rights..."
+          style={{ ...selectStyle, outline:"none", boxSizing:"border-box" }}/>
+      </div>
+
+      <Btn onClick={handleCreate}
+        disabled={(betType==="match"&&(!teamA||!teamB||teamA===teamB))||(betType==="leaderboard"&&(!playerA||!playerB||playerA===playerB))}
+        style={{ width:"100%", padding:"10px" }}>
+        Create Bet
+      </Btn>
+    </div>}
+
+    {/* Bet list */}
+    {allBets.length===0 && !creating && <div style={{ textAlign:"center", padding:"48px 20px",
+      color:"rgba(255,255,255,0.3)" }}>
+      <div style={{ fontSize:32, marginBottom:8 }}>🎲</div>
+      No bets yet — create one to get the trash talk started!
+    </div>}
+
+    {allBets.map(bet => {
+      const votes = bet.votes || {};
+      const myVote = votes[myName];
+      const optionA = bet.type==="match" ? bet.teamA : bet.playerA;
+      const optionB = bet.type==="match" ? bet.teamB : bet.playerB;
+      const votesA = Object.values(votes).filter(v=>v===optionA).length;
+      const votesB = Object.values(votes).filter(v=>v===optionB).length;
+      const totalVotes = votesA + votesB;
+
+      return <div key={bet.id} style={{ background:CARD, border:`1px solid ${BORDER}`,
+        borderRadius:12, padding:"14px 16px", marginBottom:10 }}>
+
+        {/* Header */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
+          <div>
+            <div style={{ fontWeight:800, fontSize:14, color:WHT }}>{bet.label}</div>
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:3 }}>
+              Created by {bet.creator} · Stakes: <span style={{ color:G4 }}>{bet.stake}</span>
+            </div>
+          </div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", textAlign:"right" }}>
+            {totalVotes} vote{totalVotes!==1?"s":""}
+          </div>
+        </div>
+
+        {/* Vote buttons */}
+        <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+          {[optionA, optionB].map(option => {
+            const vCount = option===optionA ? votesA : votesB;
+            const pct = totalVotes ? Math.round((vCount/totalVotes)*100) : 0;
+            const isPick = myVote===option;
+            return <button key={option} onClick={()=>handleVote(bet.id, option)} style={{
+              flex:1, padding:"10px 8px", borderRadius:10, cursor:"pointer",
+              background:isPick?"rgba(0,166,81,0.2)":"rgba(0,0,0,0.25)",
+              border:`1px solid ${isPick?G4:BORDER}`,
+              color:isPick?G4:"rgba(255,255,255,0.6)",
+              fontWeight:isPick?800:400, fontSize:12,
+              fontFamily:"inherit", textAlign:"center", transition:"all 0.15s"
+            }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, marginBottom:4 }}>
+                {bet.type==="match" && <Dot team={option} size={8}/>}
+                <span>{option}</span>
+                {isPick && <span style={{ fontSize:10 }}>✓</span>}
+              </div>
+              {totalVotes>0 && <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>
+                {pct}% ({vCount})
+              </div>}
+            </button>;
+          })}
+        </div>
+
+        {/* Vote breakdown */}
+        {totalVotes>0 && <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+          {Object.entries(votes).map(([voter, pick]) => (
+            <span key={voter} style={{ fontSize:9, padding:"2px 6px",
+              background: pick===optionA?"rgba(0,166,81,0.15)":"rgba(100,181,246,0.15)",
+              border:`1px solid ${pick===optionA?"rgba(0,166,81,0.3)":"rgba(100,181,246,0.3)"}`,
+              borderRadius:20, color:"rgba(255,255,255,0.5)" }}>
+              {voter} → {pick}
+            </span>
+          ))}
+        </div>}
+      </div>;
+    })}
+  </div>;
+}
+
+
 
 function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate }) {
   const [pass,setPass]     = useState("");
@@ -1371,12 +1712,14 @@ export default function App() {
   const [tab,setTab]         = useState("groups");
   const [saving,setSaving]   = useState(false);
   const [saved,setSaved]     = useState(false);
+  const [showSplash,setShowSplash] = useState(false);
   const [entries,setEntries] = useState([]);
   const [phase,setPhase]     = useState(1);
   const [actualFF,setActualFF]           = useState(null);
   const [liveStandings,setLiveStandings] = useState(null);
   const [locks,setLocks]                 = useState({ groups:false, knockout:false });
   const [bracket,setBracket]             = useState(null);
+  const [bets,setBets]                   = useState([]);
   const [picks,setPicks] = useState({ groups:{}, bracket:{}, finalFour:{} });
 
   const loadAdmin = useCallback(async()=>{
@@ -1387,6 +1730,7 @@ export default function App() {
       if(s.liveStandings)    setLiveStandings(s.liveStandings);
       if(s.locks)            setLocks(s.locks);
       if(s.bracket)          setBracket(s.bracket);
+      if(s.bets)             setBets(s.bets);
     }
   },[]);
 
@@ -1395,7 +1739,7 @@ export default function App() {
   },[]);
 
   useEffect(()=>{ if(screen==="app"){ loadAdmin(); loadLeaderboard(); } },[screen,loadAdmin,loadLeaderboard]);
-  useEffect(()=>{ if(tab==="leaderboard"||tab==="predictions"){ loadAdmin(); loadLeaderboard(); } },[tab,loadAdmin,loadLeaderboard]);
+  useEffect(()=>{ if(tab==="leaderboard"||tab==="predictions"||tab==="bets"){ loadAdmin(); loadLeaderboard(); } },[tab,loadAdmin,loadLeaderboard]);
 
   const handleLogin = (n,p,existingPicks) => {
     setName(n); setPin(p);
@@ -1407,18 +1751,16 @@ export default function App() {
     setSaving(true);
     await saveEntry(name,pin,picks);
     await loadLeaderboard();
-    setSaving(false); setSaved(true);
-    setTimeout(()=>setSaved(false),2500);
+    setSaving(false);
+    // Show splash then redirect to leaderboard
+    setShowSplash(true);
+    setTimeout(()=>{ setShowSplash(false); setTab("leaderboard"); }, 2000);
   };
 
   const handleDelete = async (playerName) => {
     await sb(`picks?name=eq.${encodeURIComponent(playerName)}`, {
-      method: "DELETE",
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-      },
+      method:"DELETE",
+      headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}`, "Content-Type":"application/json" },
     });
     await loadLeaderboard();
   };
@@ -1449,16 +1791,32 @@ export default function App() {
   if(screen==="login") return <LoginScreen onLogin={handleLogin}/>;
 
   const tabs = [
-    { key:"groups",      label:`Groups ${groupsDone===12?"✓":"("+groupsDone+"/12)"}` },
-    { key:"knockout",    label:`Knockout${phase<2?" 🔒":""}` },
+    { key:"groups",      label:`Groups${groupsDone===12?" ✓":""}` },
+    { key:"knockout",    label:`Knockouts${phase<2?" 🔒":""}` },
     { key:"finalfour",   label:`Final 4${phase<3?" 🔒":""}` },
-    { key:"leaderboard", label:`🏅 (${entries.length})` },
-    { key:"predictions", label:"📋" },
-    { key:"admin",       label:"⚙️" },
+    { key:"leaderboard", label:`Leaderboard` },
+    { key:"bets",        label:`Bets` },
+    { key:"admin",       label:`Admin` },
   ];
 
   return <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#001a0d,#000)",
     fontFamily:"'Segoe UI',system-ui,Arial,sans-serif", color:WHT }}>
+
+    {/* Save splash overlay */}
+    {showSplash && <div style={{
+      position:"fixed", inset:0, zIndex:1000,
+      background:"rgba(0,0,0,0.85)", backdropFilter:"blur(8px)",
+      display:"flex", alignItems:"center", justifyContent:"center",
+      flexDirection:"column", gap:16
+    }}>
+      <div style={{ fontSize:64 }}>✅</div>
+      <div style={{ fontSize:24, fontWeight:900, color:G4 }}>Picks Saved!</div>
+      <div style={{ fontSize:14, color:"rgba(255,255,255,0.5)" }}>Taking you to the leaderboard…</div>
+      <div style={{ width:200, height:4, background:"rgba(255,255,255,0.1)", borderRadius:4, overflow:"hidden", marginTop:8 }}>
+        <div style={{ height:"100%", background:G4, borderRadius:4, animation:"none", width:"100%",
+          transition:"width 2s linear" }}/>
+      </div>
+    </div>}
 
     <div style={{ background:`linear-gradient(135deg,${G2},#003d1a)`,
       borderBottom:`2px solid ${G4}`, padding:"13px 18px", boxShadow:"0 4px 20px rgba(0,0,0,0.4)" }}>
@@ -1479,8 +1837,8 @@ export default function App() {
             <div style={{ fontSize:22, fontWeight:900, color:G4 }}>{score.total}</div>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textTransform:"uppercase" }}>pts</div>
           </div>
-          <Btn onClick={handleSave} disabled={saving} bg={saved?"#2e7d32":G4} color={WHT}>
-            {saving?"Saving...":saved?"✓ Saved!":"Save Picks"}
+          <Btn onClick={handleSave} disabled={saving} bg={G4} color={WHT}>
+            {saving?"Saving...":"Save Picks"}
           </Btn>
         </div>
       </div>
@@ -1520,7 +1878,10 @@ export default function App() {
         )}
 
         {tab==="leaderboard"&&<Leaderboard entries={entries} myName={name}
-          actualFF={actualFF} liveStandings={liveStandings} bracket={bracket}/>}
+          actualFF={actualFF} liveStandings={liveStandings} bracket={bracket} locks={locks}/>}
+
+        {tab==="bets"&&<BetsTab entries={entries} myName={name}
+          bets={bets} onBetsChange={setBets}/>}
 
         {tab==="predictions"&&<AdminPredictions entries={entries}
           actualFF={actualFF} liveStandings={liveStandings} bracket={bracket}
@@ -1532,11 +1893,11 @@ export default function App() {
 
       </div>
 
-      {tab!=="leaderboard"&&tab!=="admin"&&tab!=="predictions"&&(
+      {tab!=="leaderboard"&&tab!=="admin"&&tab!=="predictions"&&tab!=="bets"&&(
         <div style={{ marginTop:24, display:"flex", justifyContent:"center" }}>
-          <Btn onClick={handleSave} disabled={saving} bg={saved?"#2e7d32":G4} color={WHT}
+          <Btn onClick={handleSave} disabled={saving} bg={G4} color={WHT}
             style={{ minWidth:180, padding:"12px" }}>
-            {saving?"Saving...":saved?"✓ Saved!":"💾 Save My Picks"}
+            {saving?"Saving...":"💾 Save My Picks"}
           </Btn>
         </div>
       )}
