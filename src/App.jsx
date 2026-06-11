@@ -1182,6 +1182,7 @@ async function checkIsLocked() {
     return rows?.[0]?.locks?.groups === true;
   } catch { return false; }
 }
+async function loadBets() {
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/admin_state?id=eq.1&select=bets`, {
       headers: {
