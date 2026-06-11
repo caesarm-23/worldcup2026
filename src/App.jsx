@@ -1860,11 +1860,11 @@ export default function App() {
     const s = await getFullAdminState();
     if(s){
       if(s.phase!=null)                    setPhase(s.phase);
-      if(s.actualFF)                       setActualFF(s.actualFF);
-      if(s.liveStandings)                  setLiveStandings(s.liveStandings);
-      if(s.locks)                          setLocks(s.locks);
-      if(s.bracket)                        setBracket(s.bracket);
-      if(Array.isArray(s.bets))            setBets(s.bets); // always update, even empty
+      setActualFF(s.actualFF||null);
+      setLiveStandings(s.liveStandings||null);
+      setLocks(s.locks||{ groups:false, knockout:false });
+      setBracket(s.bracket||null);
+      if(Array.isArray(s.bets))            setBets(s.bets);
     }
   },[]);
 
