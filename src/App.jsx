@@ -1145,12 +1145,32 @@ function AdminPredictions({ entries, actualFF, liveStandings, bracket, onDelete 
 // ─── BETS TAB ─────────────────────────────────────────────────────────────────
 
 async function saveBets(bets) {
-  await sb("admin_state?id=eq.1", {
-    method:"PATCH",
-    body:JSON.stringify({ bets }),
-    headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}`,
-      "Content-Type":"application/json", Prefer:"return=representation" },
+  // Store bets as a single row in admin_state for simplicity
+  // Use direct patch to avoid RLS issues
+  await fetch(`${SUPABASE_URL}/rest/v1/admin_state?id=eq.1`, {
+    method: "PATCH",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify({ bets }),
   });
+}
+
+async function loadBets() {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/admin_state?id=eq.1&select=bets`, {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const rows = await r.json();
+    return Array.isArray(rows) && rows[0]?.bets ? rows[0].bets : [];
+  } catch { return []; }
 }
 
 function BetsTab({ entries, myName, bets, onBetsChange }) {
@@ -1167,8 +1187,8 @@ function BetsTab({ entries, myName, bets, onBetsChange }) {
     let cancelled = false;
     const refresh = async () => {
       try {
-        const s = await getFullAdminState();
-        if (!cancelled && s && Array.isArray(s.bets)) onBetsChange(s.bets);
+        const latest = await loadBets();
+        if (!cancelled) onBetsChange(latest);
       } catch(e) { console.error("bets poll error", e); }
     };
     refresh();
@@ -1686,6 +1706,7 @@ function LoginScreen({ onLogin }) {
   const [loading,setLoading]     = useState(false);
   const [error,setError]         = useState("");
   const [existing,setExisting]   = useState(null);
+  const [isLocked,setIsLocked]   = useState(false);
 
   const inputStyle = { width:"100%", padding:"12px 14px", borderRadius:10,
     border:`1px solid ${BORDER}`, background:"rgba(0,0,0,0.4)", color:WHT,
@@ -1694,8 +1715,18 @@ function LoginScreen({ onLogin }) {
   const handleName = async () => {
     if (!nameInput.trim()) return;
     setLoading(true); setError("");
+    // Check locks from server
+    const adminState = await getFullAdminState();
+    const locked = adminState?.locks?.groups || false;
     const entry = await loadMyEntry(nameInput.trim());
     setExisting(entry);
+    setIsLocked(locked);
+    // If locked and new user — block them
+    if (locked && !entry) {
+      setError("Picks are locked — the tournament has started. Contact the league admin.");
+      setLoading(false);
+      return;
+    }
     setStep(entry?"pin-return":"pin-new");
     setLoading(false);
   };
@@ -1715,6 +1746,12 @@ function LoginScreen({ onLogin }) {
         setError("Wrong PIN. Contact the league admin."); setLoading(false);
       }
     } else {
+      // Double-check lock before creating new account
+      if (isLocked) {
+        setError("Picks are locked — the tournament has started.");
+        setLoading(false);
+        return;
+      }
       const newPicks = { groups:{}, bracket:{}, finalFour:{} };
       await saveEntry(name, pinInput, newPicks);
       onLogin(name, pinInput, newPicks);
@@ -1816,11 +1853,12 @@ export default function App() {
   };
 
   const handleSave = async () => {
+    // Enforce group stage lock — prevent saving if locked
+    if (locks?.groups) return;
     setSaving(true);
     await saveEntry(name,pin,picks);
     await loadLeaderboard();
     setSaving(false);
-    // Show splash then redirect to leaderboard
     setShowSplash(true);
     setTimeout(()=>{ setShowSplash(false); setTab("leaderboard"); }, 2000);
   };
@@ -1905,8 +1943,8 @@ export default function App() {
             <div style={{ fontSize:22, fontWeight:900, color:G4 }}>{score.total}</div>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textTransform:"uppercase" }}>pts</div>
           </div>
-          <Btn onClick={handleSave} disabled={saving} bg={G4} color={WHT}>
-            {saving?"Saving...":"Save Picks"}
+          <Btn onClick={handleSave} disabled={saving||locks?.groups} bg={G4} color={WHT}>
+            {saving?"Saving...":locks?.groups?"🔒 Locked":"Save Picks"}
           </Btn>
         </div>
       </div>
@@ -1963,9 +2001,9 @@ export default function App() {
 
       {tab!=="leaderboard"&&tab!=="admin"&&tab!=="predictions"&&tab!=="bets"&&(
         <div style={{ marginTop:24, display:"flex", justifyContent:"center" }}>
-          <Btn onClick={handleSave} disabled={saving} bg={G4} color={WHT}
+          <Btn onClick={handleSave} disabled={saving||locks?.groups} bg={G4} color={WHT}
             style={{ minWidth:180, padding:"12px" }}>
-            {saving?"Saving...":"💾 Save My Picks"}
+            {saving?"Saving...":locks?.groups?"🔒 Picks Locked":"💾 Save My Picks"}
           </Btn>
         </div>
       )}
