@@ -1606,6 +1606,60 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate }
         {ffDraft.length} selected — need exactly 4
       </div>}
     </div>
+
+    {/* ── PLAYERS: PINs & Delete ── */}
+    <PlayerManager onDelete={async(playerName)=>{
+      await sb(`picks?name=eq.${encodeURIComponent(playerName)}`, {
+        method:"DELETE",
+        headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}`, "Content-Type":"application/json" },
+      });
+      flash(`✓ ${playerName} deleted`);
+    }}/>
+  </div>;
+}
+
+function PlayerManager({ onDelete }) {
+  const [players, setPlayers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    loadAllEntriesWithPins().then(p=>{ setPlayers(p); setLoading(false); });
+  },[]);
+
+  if (loading) return <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10,
+    padding:"14px 16px", marginTop:14, color:"rgba(255,255,255,0.4)", fontSize:12 }}>Loading players...</div>;
+
+  return <div style={{ background:CARD, border:"1px solid rgba(255,215,0,0.25)", borderRadius:10, padding:"14px 16px", marginTop:14 }}>
+    <SectionTitle>👥 Players — PINs & Account Management</SectionTitle>
+    <div style={{ color:"rgba(255,255,255,0.35)", fontSize:10, marginBottom:12 }}>
+      Use this to help players who are locked out of their account. 🗑️ removes duplicate accounts.
+    </div>
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      {players.length===0 && <div style={{ color:"rgba(255,255,255,0.3)", fontSize:12 }}>No players yet.</div>}
+      {players.map((p,i) => (
+        <div key={p.name} style={{ display:"flex", alignItems:"center", gap:10,
+          background:"rgba(0,0,0,0.2)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"10px 14px" }}>
+          <div style={{ fontSize:14, width:24, textAlign:"center", flexShrink:0 }}>
+            {["🥇","🥈","🥉"][i]||<span style={{ color:"rgba(255,255,255,0.3)", fontSize:11 }}>#{i+1}</span>}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontWeight:700, fontSize:13, color:WHT }}>{p.name}</div>
+          </div>
+          <div style={{ background:"rgba(255,215,0,0.12)", border:"1px solid rgba(255,215,0,0.3)",
+            borderRadius:6, padding:"3px 10px", fontSize:12, color:GLD, fontWeight:800, letterSpacing:"3px" }}>
+            {p.pin || "—"}
+          </div>
+          <button onClick={()=>{ if(window.confirm(`Delete ${p.name}? This cannot be undone.`)){
+            onDelete(p.name);
+            setPlayers(prev=>prev.filter(x=>x.name!==p.name));
+          }}} style={{ background:"rgba(220,50,50,0.12)", border:"1px solid rgba(220,50,50,0.3)",
+            borderRadius:8, padding:"6px 12px", cursor:"pointer", color:"#ff8a80",
+            fontSize:14, fontFamily:"inherit", flexShrink:0 }}>
+            🗑️
+          </button>
+        </div>
+      ))}
+    </div>
   </div>;
 }
 
