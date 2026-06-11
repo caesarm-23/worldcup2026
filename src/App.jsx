@@ -715,7 +715,7 @@ function FinalFourPicker({ actualFF, ffPicks, onChange, locked, bracket }) {
 function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks }) {
   const [selected, setSelected] = useState(null);
   const hasLive = liveStandings && Object.keys(liveStandings).length>0;
-  const canViewPicks = locks?.groups; // picks visible once group stage is locked
+  const canViewPicks = locks?.groups || REGISTRATION_LOCKED; // picks visible once group stage is locked
 
   const scored = [...entries]
     .map(e => ({ ...e, score: calcScore(e.picks, actualFF, liveStandings, bracket) }))
@@ -1885,15 +1885,16 @@ export default function App() {
     return ()=>clearInterval(interval);
   },[screen, loadAdmin, loadLeaderboard]);
 
-  const handleLogin = (n,p,existingPicks) => {
+  const handleLogin = async (n,p,existingPicks) => {
     setName(n); setPin(p);
     if(existingPicks) setPicks(existingPicks);
+    // Load admin state BEFORE showing the app so locks are applied immediately
+    await loadAdmin();
     setScreen("app");
   };
 
   const handleSave = async () => {
-    // Enforce group stage lock — prevent saving if locked
-    if (locks?.groups) return;
+    if (locks?.groups || REGISTRATION_LOCKED) return;
     setSaving(true);
     await saveEntry(name,pin,picks);
     await loadLeaderboard();
@@ -1986,7 +1987,7 @@ export default function App() {
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textTransform:"uppercase" }}>pts</div>
           </div>
           <Btn onClick={handleSave} disabled={saving||locks?.groups} bg={G4} color={WHT}>
-            {saving?"Saving...":locks?.groups?"🔒 Locked":"Save Picks"}
+            {saving?"Saving...":(locks?.groups||REGISTRATION_LOCKED)?"🔒 Locked":"Save Picks"}
           </Btn>
         </div>
       </div>
@@ -2001,7 +2002,7 @@ export default function App() {
           <ConfChart/>
           <GroupPicker picks={picks.groups}
             onChange={g=>setPicks(p=>({...p,groups:g}))}
-            liveStandings={liveStandings} locked={locks?.groups}/>
+            liveStandings={liveStandings} locked={locks?.groups || REGISTRATION_LOCKED}/>
         </>}
 
         {tab==="knockout"&&(phase<2
@@ -2045,7 +2046,7 @@ export default function App() {
         <div style={{ marginTop:24, display:"flex", justifyContent:"center" }}>
           <Btn onClick={handleSave} disabled={saving||locks?.groups} bg={G4} color={WHT}
             style={{ minWidth:180, padding:"12px" }}>
-            {saving?"Saving...":locks?.groups?"🔒 Picks Locked":"💾 Save My Picks"}
+            {saving?"Saving...":(locks?.groups||REGISTRATION_LOCKED)?"🔒 Picks Locked":"💾 Save My Picks"}
           </Btn>
         </div>
       )}
