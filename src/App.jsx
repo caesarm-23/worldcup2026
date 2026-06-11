@@ -18,6 +18,16 @@ const sb = (path, opts = {}) =>
 // ─── STORAGE ──────────────────────────────────────────────────────────────────
 
 async function saveEntry(name, pin, picks) {
+  // Check lock state before saving — enforce at request time
+  const adminState = await getFullAdminState();
+  if (adminState?.locks?.groups) {
+    // If locked, only allow saving knockout/finalFour picks, not groups
+    const existing = await loadMyEntry(name);
+    if (existing) {
+      // Preserve their original group picks — don't overwrite
+      picks = { ...picks, groups: existing.data?.groups || picks.groups };
+    }
+  }
   await sb("picks", {
     method: "POST",
     body: JSON.stringify({ name, pin, data: picks, updated_at: new Date().toISOString() }),
@@ -1382,9 +1392,8 @@ function BetsTab({ entries, myName, bets, onBetsChange }) {
 
 
 
-function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate }) {
+function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, auth, onAuth }) {
   const [pass,setPass]     = useState("");
-  const [auth,setAuth]     = useState(false);
   const [msg,setMsg]       = useState("");
   const [saving,setSaving] = useState(false);
   const [liveDraft,setLiveDraft]   = useState(liveStandings||{});
@@ -1439,12 +1448,12 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate }
     <div style={{ fontSize:26, marginBottom:8 }}>🔐</div>
     <div style={{ color:"rgba(255,255,255,0.6)", fontSize:13, marginBottom:16 }}>Admin access required</div>
     <input value={pass} onChange={e=>setPass(e.target.value)} type="password"
-      onKeyDown={e=>e.key==="Enter"&&pass===ADMIN_PASS&&setAuth(true)}
+      onKeyDown={e=>e.key==="Enter"&&pass===ADMIN_PASS&&onAuth(true)}
       placeholder="Password..."
       style={{ width:"100%", padding:"11px 13px", borderRadius:8, border:`1px solid ${BORDER}`,
         background:"rgba(0,0,0,0.3)", color:WHT, fontSize:14, outline:"none",
         boxSizing:"border-box", marginBottom:10, fontFamily:"inherit" }}/>
-    <Btn onClick={()=>{ if(pass===ADMIN_PASS) setAuth(true); else flash("Wrong password"); }} style={{ width:"100%" }}>
+    <Btn onClick={()=>{ if(pass===ADMIN_PASS) onAuth(true); else setMsg("Wrong password"); }} style={{ width:"100%" }}>
       Unlock Admin
     </Btn>
     {msg&&<div style={{ color:"#ff6b6b", fontSize:11, marginTop:8 }}>{msg}</div>}
@@ -1816,7 +1825,6 @@ export default function App() {
   const [pin,setPin]         = useState("");
   const [tab,setTab]         = useState("groups");
   const [saving,setSaving]   = useState(false);
-  const [saved,setSaved]     = useState(false);
   const [showSplash,setShowSplash] = useState(false);
   const [entries,setEntries] = useState([]);
   const [phase,setPhase]     = useState(1);
@@ -1825,17 +1833,18 @@ export default function App() {
   const [locks,setLocks]                 = useState({ groups:false, knockout:false });
   const [bracket,setBracket]             = useState(null);
   const [bets,setBets]                   = useState([]);
+  const [adminAuth,setAdminAuth]         = useState(false); // persists across tab switches
   const [picks,setPicks] = useState({ groups:{}, bracket:{}, finalFour:{} });
 
   const loadAdmin = useCallback(async()=>{
     const s = await getFullAdminState();
     if(s){
-      if(s.phase!=null)      setPhase(s.phase);
-      if(s.actualFF)         setActualFF(s.actualFF);
-      if(s.liveStandings)    setLiveStandings(s.liveStandings);
-      if(s.locks)            setLocks(s.locks);
-      if(s.bracket)          setBracket(s.bracket);
-      if(s.bets)             setBets(s.bets);
+      if(s.phase!=null)                    setPhase(s.phase);
+      if(s.actualFF)                       setActualFF(s.actualFF);
+      if(s.liveStandings)                  setLiveStandings(s.liveStandings);
+      if(s.locks)                          setLocks(s.locks);
+      if(s.bracket)                        setBracket(s.bracket);
+      if(Array.isArray(s.bets))            setBets(s.bets); // always update, even empty
     }
   },[]);
 
@@ -1845,6 +1854,16 @@ export default function App() {
 
   useEffect(()=>{ if(screen==="app"){ loadAdmin(); loadLeaderboard(); } },[screen,loadAdmin,loadLeaderboard]);
   useEffect(()=>{ if(tab==="leaderboard"||tab==="predictions"||tab==="bets"){ loadAdmin(); loadLeaderboard(); } },[tab]);
+
+  // Poll every 15 seconds — keeps locks, bets, standings, leaderboard in sync across ALL devices
+  useEffect(()=>{
+    if(screen!=="app") return;
+    const interval = setInterval(()=>{
+      loadAdmin();
+      loadLeaderboard();
+    }, 15000);
+    return ()=>clearInterval(interval);
+  },[screen, loadAdmin, loadLeaderboard]);
 
   const handleLogin = (n,p,existingPicks) => {
     setName(n); setPin(p);
@@ -1872,11 +1891,14 @@ export default function App() {
   };
 
   const handleAdminUpdate = (updates) => {
+    // Apply locally immediately for instant feedback
     if(updates.phase!=null)         setPhase(updates.phase);
     if(updates.actualFF!=null)      setActualFF(updates.actualFF);
     if(updates.liveStandings!=null) setLiveStandings(updates.liveStandings);
     if(updates.locks!=null)         setLocks(updates.locks);
     if(updates.bracket!=null)       setBracket(updates.bracket);
+    // Then reload from server to confirm sync
+    setTimeout(()=>loadAdmin(), 1000);
   };
 
   const handleBracketPick = (mi, roundKey, team) => {
@@ -1995,7 +2017,7 @@ export default function App() {
 
         {tab==="admin"&&<AdminPanel phase={phase} actualFF={actualFF}
           liveStandings={liveStandings} locks={locks} bracket={bracket}
-          onUpdate={handleAdminUpdate}/>}
+          onUpdate={handleAdminUpdate} auth={adminAuth} onAuth={setAdminAuth}/>}
 
       </div>
 
