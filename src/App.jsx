@@ -461,7 +461,7 @@ function GroupRulesCard() {
 
 // ─── GROUP PICKER ─────────────────────────────────────────────────────────────
 
-function GroupPicker({ picks, onChange, liveStandings, locked }) {
+function GroupPicker({ picks, onChange, liveStandings, locked, comparePicks, compareLabel }) {
   const handleRank = (team, rank) => {
     if (locked) return;
     const group = GROUPS.find(g => g.teams.includes(team));
@@ -479,6 +479,13 @@ function GroupPicker({ picks, onChange, liveStandings, locked }) {
     {hasLive && !locked && <InfoBox>
       <strong style={{ color:G4 }}>🔴 Live Standings Active</strong> — Green = prediction matches current real standing. Updates after each matchday.
     </InfoBox>}
+    {comparePicks && <div style={{ background:"rgba(100,181,246,0.1)", border:"1px solid rgba(100,181,246,0.3)",
+      borderRadius:8, padding:"8px 14px", marginBottom:12, fontSize:11,
+      color:"rgba(255,255,255,0.7)", display:"flex", alignItems:"center", gap:6 }}>
+      <span style={{ fontSize:14 }}>👥</span>
+      Comparing with <strong style={{ color:"#64b5f6" }}>{compareLabel}</strong> —
+      <span style={{ color:"#64b5f6" }}> blue badge</span> = their pick where it differs from yours
+    </div>}
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
       <div style={{ color:"rgba(255,255,255,0.6)", fontSize:12 }}>Rank each team 1st–4th in their group</div>
       <div style={{ color:done===12?G4:WHT, fontWeight:800, fontSize:13,
@@ -504,6 +511,8 @@ function GroupPicker({ picks, onChange, liveStandings, locked }) {
               const rank=picks[team], liveRank=liveStandings?.[team];
               const isCorrect=rank&&liveRank&&rank===liveRank;
               const isWrong=rank&&liveRank&&rank!==liveRank;
+              const theirRank = comparePicks?.[team];
+              const differs = theirRank && theirRank !== rank;
               return <div key={team} style={{
                 display:"flex", alignItems:"center", gap:7,
                 background:isCorrect?"rgba(0,166,81,0.18)":isWrong?"rgba(220,50,50,0.1)":rank?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.2)",
@@ -519,7 +528,7 @@ function GroupPicker({ picks, onChange, liveStandings, locked }) {
                     {liveRank&&<span style={{ fontSize:8, color:"rgba(255,255,255,0.4)" }}>actual: #{liveRank}</span>}
                   </div>
                 </div>
-                <div style={{ display:"flex", gap:3 }}>
+                <div style={{ display:"flex", gap:3, alignItems:"center" }}>
                   {[1,2,3,4].map(r=><button key={r} onClick={()=>handleRank(team,r)} disabled={locked} style={{
                     width:24, height:24, borderRadius:5, border:"none",
                     cursor:locked?"default":"pointer",
@@ -528,6 +537,16 @@ function GroupPicker({ picks, onChange, liveStandings, locked }) {
                     fontSize:11, fontWeight:800, fontFamily:"inherit"
                   }}>{r}</button>)}
                 </div>
+                {/* Compare badge — only shown when their pick differs */}
+                {differs && <span style={{
+                  background:"rgba(100,181,246,0.2)", border:"1px solid rgba(100,181,246,0.4)",
+                  borderRadius:4, padding:"2px 5px", fontSize:9, color:"#64b5f6",
+                  fontWeight:800, flexShrink:0, whiteSpace:"nowrap"
+                }}>#{theirRank}</span>}
+                {rank&&!differs&&comparePicks&&theirRank&&<span style={{
+                  background:"rgba(0,166,81,0.1)", borderRadius:4, padding:"2px 5px",
+                  fontSize:9, color:"rgba(0,166,81,0.6)", flexShrink:0
+                }}>≡</span>}
                 {rank&&<span style={{ background:isCorrect?G4:"rgba(255,255,255,0.15)",
                   color:isCorrect?WHT:"rgba(255,255,255,0.7)",
                   borderRadius:5, padding:"2px 6px", fontSize:10, fontWeight:800, flexShrink:0 }}>
@@ -866,7 +885,7 @@ function FinalFourPicker({ actualFF, ffPicks, onChange, locked, bracket, actualB
 
 // ─── LEADERBOARD ──────────────────────────────────────────────────────────────
 
-function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks }) {
+function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks, myPicks }) {
   const [selected, setSelected] = useState(null);
   const hasLive = liveStandings && Object.keys(liveStandings).length>0;
   const canViewPicks = locks?.groups || REGISTRATION_LOCKED; // picks visible once group stage is locked
@@ -901,15 +920,37 @@ function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks 
             </div>
             <div style={{ padding:"5px 8px" }}>
               {ranked.map(({ team, rank }) => {
-                const liveRank=liveStandings?.[team], correct=liveRank&&liveRank===rank;
-                return <div key={team} style={{ display:"flex", alignItems:"center", gap:5, padding:"2px 0" }}>
-                  <span style={{ background:rank<=2?G4:rank===3?"#7c6fc4":"#555", color:WHT,
-                    width:16, height:16, borderRadius:3, display:"inline-flex", alignItems:"center",
-                    justifyContent:"center", fontSize:9, fontWeight:800, flexShrink:0 }}>{rank}</span>
+                const liveRank = liveStandings?.[team];
+                const correct  = liveRank && liveRank === rank;
+                const wrong    = liveRank && liveRank !== rank;
+                const myRank   = myPicks?.groups?.[team];
+                const differs  = myRank && myRank !== rank;
+                const sameAsMe = myRank && myRank === rank;
+                return <div key={team} style={{
+                  display:"flex", alignItems:"center", gap:5, padding:"3px 4px", marginBottom:2, borderRadius:5,
+                  background: correct?"rgba(0,166,81,0.2)":wrong?"rgba(220,50,50,0.18)":"transparent",
+                  border: correct?"1px solid rgba(0,166,81,0.4)":wrong?"1px solid rgba(220,50,50,0.35)":"1px solid transparent",
+                }}>
+                  <span style={{
+                    background: correct?"#00a651":wrong?"#cc2222":rank<=2?"#005a2b":rank===3?"#7c6fc4":"#555",
+                    color:"#fff", width:16, height:16, borderRadius:3,
+                    display:"inline-flex", alignItems:"center", justifyContent:"center",
+                    fontSize:9, fontWeight:800, flexShrink:0
+                  }}>{rank}</span>
                   <Dot team={team} size={7}/>
-                  <span style={{ fontSize:11, color:correct?"#a5d6a7":WHT, flex:1,
-                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{team}</span>
-                  {correct&&<span style={{ fontSize:9, color:G4 }}>✓</span>}
+                  <span style={{ fontSize:11, flex:1,
+                    color: wrong?"rgba(255,255,255,0.4)":"#fff",
+                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+                    textDecoration: wrong?"line-through":"none"
+                  }}>{team}</span>
+                  {differs && <span style={{
+                    background:"rgba(100,181,246,0.2)", border:"1px solid rgba(100,181,246,0.4)",
+                    borderRadius:4, padding:"1px 5px", fontSize:9, color:"#64b5f6",
+                    fontWeight:800, flexShrink:0, whiteSpace:"nowrap"
+                  }}>You: #{myRank}</span>}
+                  {sameAsMe && <span style={{ fontSize:9, color:"rgba(0,166,81,0.5)", flexShrink:0 }}>≡</span>}
+                  {correct && <span style={{ fontSize:10, color:"#00a651", fontWeight:800, flexShrink:0 }}>✓</span>}
+                  {wrong   && <span style={{ fontSize:10, color:"#ff6b6b", fontWeight:800, flexShrink:0 }}>✗ #{liveRank}</span>}
                 </div>;
               })}
               {unranked.map(t=><div key={t} style={{ display:"flex", alignItems:"center", gap:5, padding:"2px 0", opacity:0.3 }}>
@@ -1149,15 +1190,28 @@ function AdminPredictions({ entries, actualFF, liveStandings, bracket, onDelete 
             </div>
             <div style={{ padding:"5px 8px" }}>
               {ranked.map(({ team, rank }) => {
-                const liveRank=liveStandings?.[team], correct=liveRank&&liveRank===rank;
-                return <div key={team} style={{ display:"flex", alignItems:"center", gap:5, padding:"2px 0" }}>
-                  <span style={{ background:rank<=2?G4:rank===3?"#7c6fc4":"#555", color:WHT,
-                    width:16, height:16, borderRadius:3, display:"inline-flex", alignItems:"center",
-                    justifyContent:"center", fontSize:9, fontWeight:800, flexShrink:0 }}>{rank}</span>
+                const liveRank = liveStandings?.[team];
+                const correct  = liveRank && liveRank === rank;
+                const wrong    = liveRank && liveRank !== rank;
+                return <div key={team} style={{
+                  display:"flex", alignItems:"center", gap:5, padding:"3px 4px", marginBottom:2, borderRadius:5,
+                  background: correct?"rgba(0,166,81,0.2)":wrong?"rgba(220,50,50,0.18)":"transparent",
+                  border: correct?"1px solid rgba(0,166,81,0.4)":wrong?"1px solid rgba(220,50,50,0.35)":"1px solid transparent",
+                }}>
+                  <span style={{
+                    background: correct?"#00a651":wrong?"#cc2222":rank<=2?"#005a2b":rank===3?"#7c6fc4":"#555",
+                    color:"#fff", width:16, height:16, borderRadius:3,
+                    display:"inline-flex", alignItems:"center", justifyContent:"center",
+                    fontSize:9, fontWeight:800, flexShrink:0
+                  }}>{rank}</span>
                   <Dot team={team} size={7}/>
-                  <span style={{ fontSize:11, color:correct?"#a5d6a7":WHT, flex:1,
-                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{team}</span>
-                  {correct&&<span style={{ fontSize:9, color:G4 }}>✓</span>}
+                  <span style={{ fontSize:11, flex:1,
+                    color: wrong?"rgba(255,255,255,0.4)":"#fff",
+                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+                    textDecoration: wrong?"line-through":"none"
+                  }}>{team}</span>
+                  {correct && <span style={{ fontSize:10, color:"#00a651", fontWeight:800, flexShrink:0 }}>✓</span>}
+                  {wrong   && <span style={{ fontSize:10, color:"#ff6b6b", fontWeight:800, flexShrink:0 }}>✗ #{liveRank}</span>}
                 </div>;
               })}
               {unranked.map(t=><div key={t} style={{ display:"flex", alignItems:"center", gap:5, padding:"2px 0", opacity:0.3 }}>
@@ -2065,7 +2119,7 @@ export default function App() {
   const [locks,setLocks]                 = useState({ groups:false, knockout:false });
   const [bracket,setBracket]             = useState(null);
   const [bets,setBets]                   = useState([]);
-  const [adminAuth,setAdminAuth]         = useState(false); // persists across tab switches
+  const [comparePlayer, setComparePlayer] = useState("");
   const [picks,setPicks] = useState({ groups:{}, bracket:{}, finalFour:{} });
 
   const loadAdmin = useCallback(async()=>{
@@ -2206,9 +2260,29 @@ export default function App() {
 
         {tab==="groups"&&<>
           <GroupRulesCard/>
+          {entries.length > 0 && locks?.groups && (
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+              <span style={{ fontSize:11, color:"rgba(255,255,255,0.5)", flexShrink:0 }}>👥 Compare with:</span>
+              <select value={comparePlayer} onChange={e=>setComparePlayer(e.target.value)}
+                style={{ background:"rgba(0,0,0,0.4)", color:comparePlayer?"#64b5f6":WHT,
+                  border:"1px solid "+(comparePlayer?"rgba(100,181,246,0.4)":BORDER),
+                  borderRadius:8, padding:"6px 10px", fontSize:11, fontFamily:"inherit", flex:1 }}>
+                <option value="">— No comparison —</option>
+                {entries.filter(e=>e.name!==name).map(e=>(
+                  <option key={e.name} value={e.name}>{e.name}</option>
+                ))}
+              </select>
+              {comparePlayer && <button onClick={()=>setComparePlayer("")}
+                style={{ background:"none", border:"1px solid "+BORDER, borderRadius:6,
+                  color:"rgba(255,255,255,0.4)", padding:"5px 10px", cursor:"pointer",
+                  fontSize:11, fontFamily:"inherit", flexShrink:0 }}>✕</button>}
+            </div>
+          )}
           <GroupPicker picks={picks.groups}
             onChange={g=>setPicks(p=>({...p,groups:g}))}
-            liveStandings={liveStandings} locked={locks?.groups || REGISTRATION_LOCKED}/>
+            liveStandings={liveStandings} locked={locks?.groups||REGISTRATION_LOCKED}
+            comparePicks={comparePlayer?entries.find(e=>e.name===comparePlayer)?.picks?.groups:null}
+            compareLabel={comparePlayer}/>
         </>}
 
         {tab==="knockout"&&(phase<2
@@ -2234,7 +2308,8 @@ export default function App() {
         )}
 
         {tab==="leaderboard"&&<Leaderboard entries={entries} myName={name}
-          actualFF={actualFF} liveStandings={liveStandings} bracket={bracket} locks={locks}/>}
+          actualFF={actualFF} liveStandings={liveStandings} bracket={bracket}
+          locks={locks} myPicks={picks}/>}
 
         {tab==="bets"&&<BetsTab entries={entries} myName={name}
           bets={bets} onBetsChange={setBets} adminAuth={adminAuth}/>}
@@ -2263,4 +2338,3 @@ export default function App() {
     </div>
   </div>;
 }
-// updated Fri Jun 12 10:02:27 CDT 2026
