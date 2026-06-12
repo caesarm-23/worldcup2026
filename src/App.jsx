@@ -375,31 +375,88 @@ function TabBar({ tabs, active, onChange }) {
 
 // ─── CONF CHART ───────────────────────────────────────────────────────────────
 
-function ConfChart() {
-  return <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:"14px 18px", marginBottom:16 }}>
-    <SectionTitle>🌍 All 48 Teams by Confederation</SectionTitle>
-    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-      {Object.entries(CONF_COUNTS).map(([conf,count]) => {
-        const s = CONF_STYLE[conf];
-        return <div key={conf} style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:76, fontSize:9, fontWeight:700, background:s.bg, color:s.text,
-            padding:"2px 6px", borderRadius:4, textAlign:"center", flexShrink:0 }}>{conf}</div>
-          <div style={{ flex:1, background:"rgba(0,0,0,0.25)", borderRadius:6, height:18, overflow:"hidden" }}>
-            <div style={{ width:`${(count/16)*100}%`, background:s.bg, height:"100%", borderRadius:6,
-              display:"flex", alignItems:"center", justifyContent:"flex-end", paddingRight:6 }}>
-              <span style={{ fontSize:10, fontWeight:800, color:s.text }}>{count}</span>
+function GroupRulesCard() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom:14 }}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center",
+        background:"rgba(0,90,43,0.4)", border:`1px solid rgba(0,166,81,0.3)`,
+        borderRadius:open?"10px 10px 0 0":10, padding:"10px 14px",
+        cursor:"pointer", fontFamily:"inherit", color:G4, fontWeight:800, fontSize:12,
+      }}>
+        <span>📋 How Groups Work — FIFA Rules & Scoring</span>
+        <span style={{ fontSize:14, transition:"transform 0.2s", transform:open?"rotate(180deg)":"rotate(0deg)" }}>▾</span>
+      </button>
+      {open && <div style={{ background:"rgba(0,0,0,0.35)", border:`1px solid rgba(0,166,81,0.25)`,
+        borderTop:"none", borderRadius:"0 0 10px 10px", padding:"12px 14px",
+        display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14 }}>
+
+        {/* Match Points */}
+        <div>
+          <div style={{ color:G4, fontWeight:800, fontSize:11, marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+            Match Points
+          </div>
+          {[["Win","3 pts"],["Draw","1 pt"],["Loss","0 pts"]].map(([r,p])=>(
+            <div key={r} style={{ display:"flex", justifyContent:"space-between",
+              padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:11 }}>
+              <span style={{ color:"rgba(255,255,255,0.6)" }}>{r}</span>
+              <span style={{ color:WHT, fontWeight:700 }}>{p}</span>
             </div>
+          ))}
+        </div>
+
+        {/* How Teams Advance */}
+        <div>
+          <div style={{ color:G4, fontWeight:800, fontSize:11, marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+            Who Advances
           </div>
-          <div style={{ color:"rgba(255,255,255,0.4)", fontSize:10, width:28, textAlign:"right" }}>
-            {Math.round((count/48)*100)}%
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", lineHeight:1.7 }}>
+            🟢 <strong style={{ color:WHT }}>1st & 2nd</strong> from each group advance automatically<br/>
+            🟡 <strong style={{ color:WHT }}>Best 8 third-place</strong> teams across all 12 groups also advance<br/>
+            <span style={{ fontSize:10, color:"rgba(255,255,255,0.35)" }}>→ 32 teams total reach the Round of 32</span>
           </div>
-        </div>;
-      })}
+        </div>
+
+        {/* Tiebreakers */}
+        <div>
+          <div style={{ color:G4, fontWeight:800, fontSize:11, marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+            Tiebreaker Order
+          </div>
+          {[
+            "1. Points",
+            "2. Goal difference",
+            "3. Goals scored",
+            "4. Head-to-head points",
+            "5. Head-to-head goal difference",
+            "6. Head-to-head goals scored",
+            "7. FIFA ranking / drawing of lots",
+          ].map((t,i)=>(
+            <div key={i} style={{ fontSize:10, color:i===0?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.4)",
+              padding:"2px 0", lineHeight:1.5 }}>{t}</div>
+          ))}
+        </div>
+
+        {/* Your Prediction Scoring */}
+        <div>
+          <div style={{ color:G4, fontWeight:800, fontSize:11, marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+            Your Prediction Points
+          </div>
+          {[["Correct 1st place","4 pts"],["Correct 2nd place","3 pts"],["Correct 3rd place","2 pts"],["Correct 4th place","1 pt"]].map(([r,p])=>(
+            <div key={r} style={{ display:"flex", justifyContent:"space-between",
+              padding:"4px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:11 }}>
+              <span style={{ color:"rgba(255,255,255,0.6)" }}>{r}</span>
+              <span style={{ color:G4, fontWeight:700 }}>{p}</span>
+            </div>
+          ))}
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:6, lineHeight:1.5 }}>
+            Points awarded per team placed correctly — max 120pts from group stage
+          </div>
+        </div>
+
+      </div>}
     </div>
-    <div style={{ marginTop:10, color:G4, fontSize:10, textAlign:"center", fontWeight:700 }}>
-      ✅ All 48 teams confirmed · Group stage begins June 11, 2026
-    </div>
-  </div>;
+  );
 }
 
 // ─── GROUP PICKER ─────────────────────────────────────────────────────────────
@@ -2149,7 +2206,7 @@ export default function App() {
 
         {tab==="groups"&&<>
           <ScoringPanel phase={1}/>
-          <ConfChart/>
+          <GroupRulesCard/>
           <GroupPicker picks={picks.groups}
             onChange={g=>setPicks(p=>({...p,groups:g}))}
             liveStandings={liveStandings} locked={locks?.groups || REGISTRATION_LOCKED}/>
