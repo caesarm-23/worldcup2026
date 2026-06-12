@@ -1178,7 +1178,7 @@ async function saveBets(bets) {
 // ─── TOURNAMENT LOCK ─────────────────────────────────────────────────────────
 // Set this to true to lock new registrations and group stage edits
 // This is a server-side constant — change it here and redeploy to enforce
-const REGISTRATION_LOCKED = true;
+const REGISTRATION_LOCKED = false;
 
 async function checkIsLocked() {
   // First check the hardcoded constant — this can never fail silently
