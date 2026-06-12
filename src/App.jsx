@@ -1499,7 +1499,6 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
         </div>}
       </div>;
     })}
-    })}
   </div>;
 }
 
