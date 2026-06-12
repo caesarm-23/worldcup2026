@@ -1275,6 +1275,8 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
     await saveBets(updated);
     onBetsChange(updated);
   };
+
+  const handleVote = async (betId, pick) => {
     const updated = allBets.map(b => {
       if (b.id !== betId) return b;
       const votes = { ...(b.votes||{}), [myName]: pick };
@@ -1301,12 +1303,8 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
       </Btn>
     </div>
 
-    {/* Create bet form */}
-    {creating && <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12,
-      padding:"16px", marginBottom:20 }}>
+    {creating && <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:"16px", marginBottom:20 }}>
       <SectionTitle>New Bet</SectionTitle>
-
-      {/* Type selector */}
       <div style={{ display:"flex", gap:8, marginBottom:14 }}>
         {[{k:"match",l:"⚽ Winner of X vs X"},{k:"leaderboard",l:"🏆 Who places higher"}].map(({k,l})=>(
           <button key={k} onClick={()=>setBetType(k)} style={{
@@ -1317,7 +1315,6 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
           }}>{l}</button>
         ))}
       </div>
-
       {betType==="match" && <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>
         <div style={{ color:"rgba(255,255,255,0.5)", fontSize:11 }}>Select two teams</div>
         <select value={teamA} onChange={e=>setTeamA(e.target.value)} style={selectStyle}>
@@ -1330,7 +1327,6 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
           {ALL_TEAMS.filter(t=>t!==teamA).map(t=><option key={t} value={t}>{t}</option>)}
         </select>
       </div>}
-
       {betType==="leaderboard" && <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:12 }}>
         <div style={{ color:"rgba(255,255,255,0.5)", fontSize:11 }}>Select two players</div>
         <select value={playerA} onChange={e=>setPlayerA(e.target.value)} style={selectStyle}>
@@ -1343,14 +1339,12 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
           {playerNames.filter(n=>n!==playerA).map(n=><option key={n} value={n}>{n}</option>)}
         </select>
       </div>}
-
       <div style={{ marginBottom:12 }}>
         <div style={{ color:"rgba(255,255,255,0.5)", fontSize:11, marginBottom:6 }}>Stakes (optional)</div>
         <input value={stake} onChange={e=>setStake(e.target.value)}
           placeholder="e.g. Loser buys drinks, Bragging rights..."
           style={{ ...selectStyle, outline:"none", boxSizing:"border-box" }}/>
       </div>
-
       <Btn onClick={handleCreate}
         disabled={(betType==="match"&&(!teamA||!teamB||teamA===teamB))||(betType==="leaderboard"&&(!playerA||!playerB||playerA===playerB))}
         style={{ width:"100%", padding:"10px" }}>
@@ -1358,19 +1352,17 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
       </Btn>
     </div>}
 
-    {/* Admin hidden bets toggle */}
     {adminAuth && allBets.some(b=>b.hidden) && (
       <button onClick={()=>setShowHidden(s=>!s)} style={{
         background:"none", border:`1px solid ${BORDER}`, borderRadius:8,
         color:"rgba(255,255,255,0.4)", padding:"6px 12px", cursor:"pointer",
         fontSize:11, fontFamily:"inherit", marginBottom:12
       }}>
-        {showHidden ? "Hide hidden bets" : `Show hidden bets (${allBets.filter(b=>b.hidden).length})`}
+        {showHidden ? "Hide hidden bets" : "Show hidden bets (" + allBets.filter(b=>b.hidden).length + ")"}
       </button>
     )}
 
-    {/* Bet list */}
-    {allBets.filter(b => showHidden ? true : !b.hidden).length===0 && !creating && (
+    {allBets.filter(b => adminAuth ? (showHidden || !b.hidden) : !b.hidden).length === 0 && !creating && (
       <div style={{ textAlign:"center", padding:"48px 20px", color:"rgba(255,255,255,0.3)" }}>
         <div style={{ fontSize:32, marginBottom:8 }}>🎲</div>
         No bets yet — create one to get the trash talk started!
@@ -1389,12 +1381,10 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
 
       return <div key={bet.id} style={{
         background: bet.hidden?"rgba(0,0,0,0.3)":bet.closed?"rgba(0,0,0,0.4)":CARD,
-        border:`1px solid ${bet.hidden?"rgba(255,255,255,0.05)":bet.closed?"rgba(255,215,0,0.3)":BORDER}`,
+        border:"1px solid " + (bet.hidden?"rgba(255,255,255,0.05)":bet.closed?"rgba(255,215,0,0.3)":BORDER),
         borderRadius:12, padding:"14px 16px", marginBottom:10,
         opacity: bet.hidden ? 0.5 : 1
       }}>
-
-        {/* Header */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
           <div style={{ flex:1 }}>
             <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
@@ -1403,7 +1393,7 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
               </span>
               {bet.closed && <span style={{ background:"rgba(255,215,0,0.15)", border:"1px solid rgba(255,215,0,0.4)",
                 borderRadius:20, padding:"2px 8px", fontSize:9, color:GLD, fontWeight:700 }}>CLOSED</span>}
-              {bet.hidden && <span style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${BORDER}`,
+              {bet.hidden && <span style={{ background:"rgba(255,255,255,0.05)", border:"1px solid " + BORDER,
                 borderRadius:20, padding:"2px 8px", fontSize:9, color:"rgba(255,255,255,0.3)", fontWeight:700 }}>HIDDEN</span>}
             </div>
             <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:3 }}>
@@ -1414,7 +1404,6 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
             <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>
               {totalVotes} vote{totalVotes!==1?"s":""}
             </span>
-            {/* Admin controls */}
             {adminAuth && !bet.closed && !bet.hidden && (
               <button onClick={()=>handleCloseBet(bet.id)} style={{
                 background:"rgba(255,215,0,0.1)", border:"1px solid rgba(255,215,0,0.3)",
@@ -1431,7 +1420,7 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
             )}
             {adminAuth && bet.hidden && (
               <button onClick={()=>handleUnhideBet(bet.id)} style={{
-                background:"rgba(255,255,255,0.05)", border:`1px solid ${BORDER}`,
+                background:"rgba(255,255,255,0.05)", border:"1px solid " + BORDER,
                 borderRadius:6, padding:"4px 10px", cursor:"pointer",
                 color:"rgba(255,255,255,0.5)", fontSize:11, fontWeight:700, fontFamily:"inherit"
               }}>Unhide</button>
@@ -1439,7 +1428,6 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
           </div>
         </div>
 
-        {/* Closed winner banner */}
         {bet.closed && winner && (
           <div style={{ background:"rgba(255,215,0,0.1)", border:"1px solid rgba(255,215,0,0.3)",
             borderRadius:8, padding:"10px 14px", marginBottom:10,
@@ -1454,7 +1442,6 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
           </div>
         )}
 
-        {/* Vote buttons — disabled if closed */}
         <div style={{ display:"flex", gap:8, marginBottom:10 }}>
           {[optionA, optionB].map(option => {
             const vCount = option===optionA ? votesA : votesB;
@@ -1462,13 +1449,13 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
             const isPick = myVote===option;
             const isWinner = bet.closed && option===winner;
             return <button key={option}
-              onClick={()=>!bet.closed && handleVote(bet.id, option)}
+              onClick={()=>{ if(!bet.closed) handleVote(bet.id, option); }}
               disabled={bet.closed}
               style={{
                 flex:1, padding:"10px 8px", borderRadius:10,
                 cursor:bet.closed?"default":"pointer",
                 background:isWinner?"rgba(255,215,0,0.15)":isPick?"rgba(0,166,81,0.2)":"rgba(0,0,0,0.25)",
-                border:`1px solid ${isWinner?"rgba(255,215,0,0.5)":isPick?G4:BORDER}`,
+                border:"1px solid " + (isWinner?"rgba(255,215,0,0.5)":isPick?G4:BORDER),
                 color:isWinner?GLD:isPick?G4:"rgba(255,255,255,0.6)",
                 fontWeight:isPick||isWinner?800:400, fontSize:12,
                 fontFamily:"inherit", textAlign:"center", transition:"all 0.15s"
@@ -1486,12 +1473,11 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
           })}
         </div>
 
-        {/* Vote breakdown */}
         {totalVotes>0 && <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
           {Object.entries(votes).map(([voter, pick]) => (
             <span key={voter} style={{ fontSize:9, padding:"2px 6px",
               background:pick===optionA?"rgba(0,166,81,0.15)":"rgba(100,181,246,0.15)",
-              border:`1px solid ${pick===optionA?"rgba(0,166,81,0.3)":"rgba(100,181,246,0.3)"}`,
+              border:"1px solid " + (pick===optionA?"rgba(0,166,81,0.3)":"rgba(100,181,246,0.3)"),
               borderRadius:20, color:"rgba(255,255,255,0.5)" }}>
               {voter} → {pick}
             </span>
@@ -1501,6 +1487,7 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
     })}
   </div>;
 }
+
 
 
 
@@ -2155,5 +2142,3 @@ export default function App() {
     </div>
   </div>;
 }
-
-// Thu Jun 11 22:16:12 CDT 2026
