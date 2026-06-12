@@ -1176,9 +1176,7 @@ async function saveBets(bets) {
 }
 
 // ─── TOURNAMENT LOCK ─────────────────────────────────────────────────────────
-// Set this to true to lock new registrations and group stage edits
-// This is a server-side constant — change it here and redeploy to enforce
-const REGISTRATION_LOCKED = false;
+const REGISTRATION_LOCKED = false; // Controlled via Admin panel in Supabase
 
 async function checkIsLocked() {
   // First check the hardcoded constant — this can never fail silently
@@ -1210,14 +1208,15 @@ async function loadBets() {
   } catch { return []; }
 }
 
-function BetsTab({ entries, myName, bets, onBetsChange }) {
+function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
   const [creating, setCreating] = useState(false);
-  const [betType, setBetType]   = useState("match"); // "match" | "leaderboard"
+  const [betType, setBetType]   = useState("match");
   const [teamA, setTeamA]       = useState("");
   const [teamB, setTeamB]       = useState("");
   const [playerA, setPlayerA]   = useState("");
   const [playerB, setPlayerB]   = useState("");
   const [stake, setStake]       = useState("");
+  const [showHidden, setShowHidden] = useState(false);
 
   // Poll every 10 seconds so all devices stay in sync
   useEffect(() => {
@@ -1259,7 +1258,23 @@ function BetsTab({ entries, myName, bets, onBetsChange }) {
     setTeamA(""); setTeamB(""); setPlayerA(""); setPlayerB(""); setStake("");
   };
 
-  const handleVote = async (betId, pick) => {
+  const handleCloseBet = async (betId) => {
+    const updated = allBets.map(b => b.id===betId ? { ...b, closed:true } : b);
+    await saveBets(updated);
+    onBetsChange(updated);
+  };
+
+  const handleHideBet = async (betId) => {
+    const updated = allBets.map(b => b.id===betId ? { ...b, hidden:true } : b);
+    await saveBets(updated);
+    onBetsChange(updated);
+  };
+
+  const handleUnhideBet = async (betId) => {
+    const updated = allBets.map(b => b.id===betId ? { ...b, hidden:false } : b);
+    await saveBets(updated);
+    onBetsChange(updated);
+  };
     const updated = allBets.map(b => {
       if (b.id !== betId) return b;
       const votes = { ...(b.votes||{}), [myName]: pick };
@@ -1343,14 +1358,26 @@ function BetsTab({ entries, myName, bets, onBetsChange }) {
       </Btn>
     </div>}
 
-    {/* Bet list */}
-    {allBets.length===0 && !creating && <div style={{ textAlign:"center", padding:"48px 20px",
-      color:"rgba(255,255,255,0.3)" }}>
-      <div style={{ fontSize:32, marginBottom:8 }}>🎲</div>
-      No bets yet — create one to get the trash talk started!
-    </div>}
+    {/* Admin hidden bets toggle */}
+    {adminAuth && allBets.some(b=>b.hidden) && (
+      <button onClick={()=>setShowHidden(s=>!s)} style={{
+        background:"none", border:`1px solid ${BORDER}`, borderRadius:8,
+        color:"rgba(255,255,255,0.4)", padding:"6px 12px", cursor:"pointer",
+        fontSize:11, fontFamily:"inherit", marginBottom:12
+      }}>
+        {showHidden ? "Hide hidden bets" : `Show hidden bets (${allBets.filter(b=>b.hidden).length})`}
+      </button>
+    )}
 
-    {allBets.map(bet => {
+    {/* Bet list */}
+    {allBets.filter(b => showHidden ? true : !b.hidden).length===0 && !creating && (
+      <div style={{ textAlign:"center", padding:"48px 20px", color:"rgba(255,255,255,0.3)" }}>
+        <div style={{ fontSize:32, marginBottom:8 }}>🎲</div>
+        No bets yet — create one to get the trash talk started!
+      </div>
+    )}
+
+    {allBets.filter(b => adminAuth ? (showHidden || !b.hidden) : !b.hidden).map(bet => {
       const votes = bet.votes || {};
       const myVote = votes[myName];
       const optionA = bet.type==="match" ? bet.teamA : bet.playerA;
@@ -1358,41 +1385,99 @@ function BetsTab({ entries, myName, bets, onBetsChange }) {
       const votesA = Object.values(votes).filter(v=>v===optionA).length;
       const votesB = Object.values(votes).filter(v=>v===optionB).length;
       const totalVotes = votesA + votesB;
+      const winner = totalVotes > 0 ? (votesA >= votesB ? optionA : optionB) : null;
 
-      return <div key={bet.id} style={{ background:CARD, border:`1px solid ${BORDER}`,
-        borderRadius:12, padding:"14px 16px", marginBottom:10 }}>
+      return <div key={bet.id} style={{
+        background: bet.hidden?"rgba(0,0,0,0.3)":bet.closed?"rgba(0,0,0,0.4)":CARD,
+        border:`1px solid ${bet.hidden?"rgba(255,255,255,0.05)":bet.closed?"rgba(255,215,0,0.3)":BORDER}`,
+        borderRadius:12, padding:"14px 16px", marginBottom:10,
+        opacity: bet.hidden ? 0.5 : 1
+      }}>
 
         {/* Header */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
-          <div>
-            <div style={{ fontWeight:800, fontSize:14, color:WHT }}>{bet.label}</div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+              <span style={{ fontWeight:800, fontSize:14, color:bet.hidden?"rgba(255,255,255,0.4)":WHT }}>
+                {bet.label}
+              </span>
+              {bet.closed && <span style={{ background:"rgba(255,215,0,0.15)", border:"1px solid rgba(255,215,0,0.4)",
+                borderRadius:20, padding:"2px 8px", fontSize:9, color:GLD, fontWeight:700 }}>CLOSED</span>}
+              {bet.hidden && <span style={{ background:"rgba(255,255,255,0.05)", border:`1px solid ${BORDER}`,
+                borderRadius:20, padding:"2px 8px", fontSize:9, color:"rgba(255,255,255,0.3)", fontWeight:700 }}>HIDDEN</span>}
+            </div>
             <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:3 }}>
               Created by {bet.creator} · Stakes: <span style={{ color:G4 }}>{bet.stake}</span>
             </div>
           </div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", textAlign:"right" }}>
-            {totalVotes} vote{totalVotes!==1?"s":""}
+          <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
+            <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>
+              {totalVotes} vote{totalVotes!==1?"s":""}
+            </span>
+            {/* Admin controls */}
+            {adminAuth && !bet.closed && !bet.hidden && (
+              <button onClick={()=>handleCloseBet(bet.id)} style={{
+                background:"rgba(255,215,0,0.1)", border:"1px solid rgba(255,215,0,0.3)",
+                borderRadius:6, padding:"4px 10px", cursor:"pointer",
+                color:GLD, fontSize:11, fontWeight:700, fontFamily:"inherit"
+              }}>Close</button>
+            )}
+            {adminAuth && !bet.hidden && (
+              <button onClick={()=>handleHideBet(bet.id)} style={{
+                background:"rgba(220,50,50,0.1)", border:"1px solid rgba(220,50,50,0.3)",
+                borderRadius:6, padding:"4px 10px", cursor:"pointer",
+                color:"#ff8a80", fontSize:11, fontWeight:700, fontFamily:"inherit"
+              }}>Hide</button>
+            )}
+            {adminAuth && bet.hidden && (
+              <button onClick={()=>handleUnhideBet(bet.id)} style={{
+                background:"rgba(255,255,255,0.05)", border:`1px solid ${BORDER}`,
+                borderRadius:6, padding:"4px 10px", cursor:"pointer",
+                color:"rgba(255,255,255,0.5)", fontSize:11, fontWeight:700, fontFamily:"inherit"
+              }}>Unhide</button>
+            )}
           </div>
         </div>
 
-        {/* Vote buttons */}
-        <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+        {/* Closed winner banner */}
+        {bet.closed && winner && (
+          <div style={{ background:"rgba(255,215,0,0.1)", border:"1px solid rgba(255,215,0,0.3)",
+            borderRadius:8, padding:"10px 14px", marginBottom:10,
+            display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:18 }}>🏆</span>
+            <div>
+              <div style={{ color:GLD, fontWeight:800, fontSize:13 }}>{winner} wins the vote!</div>
+              <div style={{ color:"rgba(255,255,255,0.4)", fontSize:10, marginTop:2 }}>
+                {votesA} vs {votesB} — voting is now closed
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Vote buttons — disabled if closed */}
+        <div style={{ display:"flex", gap:8, marginBottom:10 }}>
           {[optionA, optionB].map(option => {
             const vCount = option===optionA ? votesA : votesB;
             const pct = totalVotes ? Math.round((vCount/totalVotes)*100) : 0;
             const isPick = myVote===option;
-            return <button key={option} onClick={()=>handleVote(bet.id, option)} style={{
-              flex:1, padding:"10px 8px", borderRadius:10, cursor:"pointer",
-              background:isPick?"rgba(0,166,81,0.2)":"rgba(0,0,0,0.25)",
-              border:`1px solid ${isPick?G4:BORDER}`,
-              color:isPick?G4:"rgba(255,255,255,0.6)",
-              fontWeight:isPick?800:400, fontSize:12,
-              fontFamily:"inherit", textAlign:"center", transition:"all 0.15s"
-            }}>
+            const isWinner = bet.closed && option===winner;
+            return <button key={option}
+              onClick={()=>!bet.closed && handleVote(bet.id, option)}
+              disabled={bet.closed}
+              style={{
+                flex:1, padding:"10px 8px", borderRadius:10,
+                cursor:bet.closed?"default":"pointer",
+                background:isWinner?"rgba(255,215,0,0.15)":isPick?"rgba(0,166,81,0.2)":"rgba(0,0,0,0.25)",
+                border:`1px solid ${isWinner?"rgba(255,215,0,0.5)":isPick?G4:BORDER}`,
+                color:isWinner?GLD:isPick?G4:"rgba(255,255,255,0.6)",
+                fontWeight:isPick||isWinner?800:400, fontSize:12,
+                fontFamily:"inherit", textAlign:"center", transition:"all 0.15s"
+              }}>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, marginBottom:4 }}>
                 {bet.type==="match" && <Dot team={option} size={8}/>}
                 <span>{option}</span>
-                {isPick && <span style={{ fontSize:10 }}>✓</span>}
+                {isPick && !bet.closed && <span style={{ fontSize:10 }}>✓</span>}
+                {isWinner && <span style={{ fontSize:10 }}>🏆</span>}
               </div>
               {totalVotes>0 && <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>
                 {pct}% ({vCount})
@@ -1405,7 +1490,7 @@ function BetsTab({ entries, myName, bets, onBetsChange }) {
         {totalVotes>0 && <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
           {Object.entries(votes).map(([voter, pick]) => (
             <span key={voter} style={{ fontSize:9, padding:"2px 6px",
-              background: pick===optionA?"rgba(0,166,81,0.15)":"rgba(100,181,246,0.15)",
+              background:pick===optionA?"rgba(0,166,81,0.15)":"rgba(100,181,246,0.15)",
               border:`1px solid ${pick===optionA?"rgba(0,166,81,0.3)":"rgba(100,181,246,0.3)"}`,
               borderRadius:20, color:"rgba(255,255,255,0.5)" }}>
               {voter} → {pick}
@@ -1413,6 +1498,7 @@ function BetsTab({ entries, myName, bets, onBetsChange }) {
           ))}
         </div>}
       </div>;
+    })}
     })}
   </div>;
 }
@@ -2044,7 +2130,7 @@ export default function App() {
           actualFF={actualFF} liveStandings={liveStandings} bracket={bracket} locks={locks}/>}
 
         {tab==="bets"&&<BetsTab entries={entries} myName={name}
-          bets={bets} onBetsChange={setBets}/>}
+          bets={bets} onBetsChange={setBets} adminAuth={adminAuth}/>}
 
         {tab==="predictions"&&<AdminPredictions entries={entries}
           actualFF={actualFF} liveStandings={liveStandings} bracket={bracket}
