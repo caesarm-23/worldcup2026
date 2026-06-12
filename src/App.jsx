@@ -376,7 +376,7 @@ function TabBar({ tabs, active, onChange }) {
 // ─── CONF CHART ───────────────────────────────────────────────────────────────
 
 function GroupRulesCard() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   return (
     <div style={{ marginBottom:14 }}>
       <button onClick={()=>setOpen(o=>!o)} style={{
@@ -2205,7 +2205,6 @@ export default function App() {
       <div style={{ marginTop:16 }}>
 
         {tab==="groups"&&<>
-          <ScoringPanel phase={1}/>
           <GroupRulesCard/>
           <GroupPicker picks={picks.groups}
             onChange={g=>setPicks(p=>({...p,groups:g}))}
