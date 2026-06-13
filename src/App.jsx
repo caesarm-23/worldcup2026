@@ -728,29 +728,70 @@ function BracketView({ bracket, bracketPicks, onPick, locked, readOnly, actualBr
 
 // ─── FINAL FOUR PICKER ────────────────────────────────────────────────────────
 
+// ─── PICK MATCH CARD ─────────────────────────────────────────────────────────
+
+function PickMatchCard({ title, teamA, teamB, pickKey, actualWinner, pts, color, ffPicks, onSet, locked }) {
+  const pick = ffPicks?.[pickKey];
+  const mkBtn = (team) => {
+    if (!team) return <div key="tbd" style={{ flex:1, padding:"10px 8px", textAlign:"center",
+      color:"rgba(255,255,255,0.2)", fontSize:11, fontStyle:"italic" }}>TBD</div>;
+    const isPick    = pick === team;
+    const isCorrect = isPick && actualWinner && actualWinner === team;
+    const isWrong   = isPick && actualWinner && actualWinner !== team;
+    const isActual  = actualWinner === team;
+    return (
+      <button key={team} onClick={()=>onSet(pickKey, team)} disabled={locked||!teamA||!teamB}
+        style={{
+          flex:1, padding:"10px 8px", borderRadius:8, cursor:locked?"default":"pointer",
+          background: isCorrect?"rgba(0,166,81,0.25)":isWrong?"rgba(220,50,50,0.15)":isPick?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.2)",
+          border: "1px solid " + (isCorrect?G4:isWrong?"#ff5252":isPick?G4:BORDER),
+          color: isActual?GLD:isWrong?"rgba(255,255,255,0.3)":WHT,
+          fontWeight:isPick?800:400, fontSize:12, fontFamily:"inherit", transition:"all 0.15s",
+          display:"flex", alignItems:"center", justifyContent:"center", gap:5, flexWrap:"wrap"
+        }}>
+        <Dot team={team} size={8}/>{team}
+        {isCorrect && <span style={{ color:G4, fontSize:10, fontWeight:800 }}>✓+{pts}</span>}
+        {isWrong   && <span style={{ color:"#ff5252", fontSize:10 }}>✗</span>}
+        {isActual && !isPick && <span style={{ fontSize:10 }}>🏆</span>}
+      </button>
+    );
+  };
+  return (
+    <div style={{ background:CARD, border:"1px solid "+BORDER, borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+        <div style={{ color, fontWeight:800, fontSize:13 }}>{title}</div>
+        <div style={{ background:"rgba(0,0,0,0.3)", border:"1px solid "+BORDER,
+          borderRadius:20, padding:"2px 10px", color:G4, fontSize:11, fontWeight:700 }}>+{pts} pts</div>
+      </div>
+      <div style={{ display:"flex", gap:8 }}>
+        {mkBtn(teamA)}
+        <div style={{ display:"flex", alignItems:"center", color:"rgba(255,255,255,0.3)", fontSize:11, flexShrink:0 }}>vs</div>
+        {mkBtn(teamB)}
+      </div>
+    </div>
+  );
+}
+
+// ─── FINAL FOUR PICKER ────────────────────────────────────────────────────────
+
 function FinalFourPicker({ actualFF, ffPicks, onChange, locked, bracket, actualBracket }) {
-  // actualFF: array of 4 team names (the real semifinalists)
-  // ffPicks: { sf1winner, sf2winner, champion, third }
-  const pool = actualFF || [];
-  const sfs  = bracket?.sf || actualBracket?.sf || [];
+  const pool    = actualFF || [];
+  const sfs     = [...(bracket?.sf || actualBracket?.sf || [])];
+  const sf1     = sfs[0] || {};
+  const sf2     = sfs[1] || {};
+  const sf1Pick = ffPicks?.sf1winner || null;
+  const sf2Pick = ffPicks?.sf2winner || null;
+  const sf1Win  = sf1.winner || null;
+  const sf2Win  = sf2.winner || null;
+  const sf1Lose = sf1Win ? (sf1.teamA===sf1Win?sf1.teamB:sf1.teamA) : null;
+  const sf2Lose = sf2Win ? (sf2.teamA===sf2Win?sf2.teamB:sf2.teamA) : null;
+  const finalWin = (actualBracket?.final||[])[0]?.winner || null;
+  const consWin  = (actualBracket?.consolation||[])[0]?.winner || null;
 
-  // Derive the two SF matchups
-  const sf1 = sfs[0] || {};
-  const sf2 = sfs[1] || {};
-
-  // Player's picks
-  const sf1Pick    = ffPicks?.sf1winner || null;
-  const sf2Pick    = ffPicks?.sf2winner || null;
-  const champPick  = ffPicks?.champion  || null;
-  const thirdPick  = ffPicks?.third     || null;
-
-  // Real results from actual bracket
-  const sf1Winner  = sf1.winner || null;
-  const sf2Winner  = sf2.winner || null;
-  const sf1Loser   = sf1Winner ? (sf1.teamA===sf1Winner?sf1.teamB:sf1.teamA) : null;
-  const sf2Loser   = sf2Winner ? (sf2.teamA===sf2Winner?sf2.teamB:sf2.teamA) : null;
-  const finalMatch = actualBracket?.final?.[0] || {};
-  const consMatch  = { teamA: sf1Loser, teamB: sf2Loser, winner: actualBracket?.consolation?.[0]?.winner || null };
+  const finalA = sf1Pick || sf1Win || null;
+  const finalB = sf2Pick || sf2Win || null;
+  const consA  = sf1Pick ? (sf1Pick===sf1.teamA?sf1.teamB:sf1.teamA)||sf1Lose : sf1Lose;
+  const consB  = sf2Pick ? (sf2Pick===sf2.teamA?sf2.teamB:sf2.teamA)||sf2Lose : sf2Lose;
 
   const set = (key, team) => {
     if (locked) return;
@@ -759,131 +800,50 @@ function FinalFourPicker({ actualFF, ffPicks, onChange, locked, bracket, actualB
     onChange(next);
   };
 
-  const PickMatch = ({ title, teamA, teamB, pickKey, actualWinner, pts, color }) => {
-    const pick = ffPicks?.[pickKey];
-    const isCorrectA = pick===teamA && actualWinner && actualWinner===teamA;
-    const isCorrectB = pick===teamB && actualWinner && actualWinner===teamB;
-    const isWrongA   = pick===teamA && actualWinner && actualWinner!==teamA;
-    const isWrongB   = pick===teamB && actualWinner && actualWinner!==teamB;
-
-    const TeamBtn = ({ team, isCorrect, isWrong }) => {
-      if (!team) return <div style={{ flex:1, padding:"10px 8px", textAlign:"center",
-        color:"rgba(255,255,255,0.2)", fontSize:11, fontStyle:"italic" }}>TBD</div>;
-      const isPick = pick === team;
-      return (
-        <button onClick={()=>set(pickKey, team)} disabled={locked||!teamA||!teamB}
-          style={{
-            flex:1, padding:"10px 8px", borderRadius:8, cursor:locked?"default":"pointer",
-            background: isCorrect?"rgba(0,166,81,0.25)":isWrong?"rgba(220,50,50,0.15)":isPick?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.2)",
-            border: "1px solid " + (isCorrect?G4:isWrong?"#ff5252":isPick?G4:BORDER),
-            color: actualWinner===team?GLD:isWrong?"rgba(255,255,255,0.3)":WHT,
-            fontWeight:isPick?800:400, fontSize:12, fontFamily:"inherit", transition:"all 0.15s",
-            display:"flex", alignItems:"center", justifyContent:"center", gap:5
-          }}>
-          <Dot team={team} size={8}/>{team}
-          {isCorrect && <span style={{ color:G4, fontSize:10, fontWeight:800 }}>✓+{pts}</span>}
-          {isWrong   && <span style={{ color:"#ff5252", fontSize:10 }}>✗</span>}
-          {actualWinner===team && !isPick && <span style={{ fontSize:10 }}>🏆</span>}
-        </button>
-      );
-    };
-
-    return (
-      <div style={{ background:CARD, border:"1px solid " + BORDER, borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <div style={{ color, fontWeight:800, fontSize:13 }}>{title}</div>
-          <div style={{ background:"rgba(0,0,0,0.3)", border:"1px solid " + BORDER,
-            borderRadius:20, padding:"2px 10px", color:G4, fontSize:11, fontWeight:700 }}>
-            +{pts} pts
-          </div>
-        </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <TeamBtn team={teamA} isCorrect={isCorrectA} isWrong={isWrongA}/>
-          <div style={{ display:"flex", alignItems:"center", color:"rgba(255,255,255,0.3)", fontSize:11 }}>vs</div>
-          <TeamBtn team={teamB} isCorrect={isCorrectB} isWrong={isWrongB}/>
-        </div>
-        {/* Team journey context */}
-        {(teamA||teamB) && bracket && (
-          <div style={{ marginTop:8, display:"flex", gap:12, flexWrap:"wrap" }}>
-            {[teamA,teamB].filter(Boolean).map(team=>(
-              <div key={team} style={{ fontSize:9, color:"rgba(255,255,255,0.3)" }}>
-                <Dot team={team} size={6}/><span>{team}:</span>{" "}
-                <TeamJourney team={team} bracket={actualBracket||bracket} inline/>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   if (pool.length === 0) {
     return <PhaseGate label="Final Four Not Yet Set"
-      desc="The admin will confirm the four semifinalists once they're known."/>;
+      desc="The admin will confirm the four semifinalists once they are known."/>;
   }
 
   return (
     <div>
       {locked && <LockedBanner/>}
       <InfoBox>
-        <strong style={{ color:G4 }}>Final Four</strong> — Pick the winner of each semifinal, then the Final and Consolation match.
-        3rd place earns <strong style={{ color:WHT }}>12pts</strong> (more than 2nd's 7pts) — they must win the consolation match.
+        <strong style={{ color:G4 }}>Final Four</strong> — Pick SF winners, then the Final and Consolation.
+        3rd place earns <strong style={{ color:WHT }}>12pts</strong> — more than 2nd (7pts).
       </InfoBox>
 
       <SectionTitle>⚽ Semifinal 1</SectionTitle>
-      <PickMatch title="Semifinal 1 — Who advances to the Final?"
-        teamA={sf1.teamA} teamB={sf1.teamB} pickKey="sf1winner"
-        actualWinner={sf1Winner} pts={12} color="#64b5f6"/>
+      <PickMatchCard title="SF1 — Who goes to the Final?"
+        teamA={sf1.teamA||null} teamB={sf1.teamB||null} pickKey="sf1winner"
+        actualWinner={sf1Win} pts={12} color="#64b5f6"
+        ffPicks={ffPicks} onSet={set} locked={locked}/>
 
       <SectionTitle>⚽ Semifinal 2</SectionTitle>
-      <PickMatch title="Semifinal 2 — Who advances to the Final?"
-        teamA={sf2.teamA} teamB={sf2.teamB} pickKey="sf2winner"
-        actualWinner={sf2Winner} pts={12} color="#64b5f6"/>
+      <PickMatchCard title="SF2 — Who goes to the Final?"
+        teamA={sf2.teamA||null} teamB={sf2.teamB||null} pickKey="sf2winner"
+        actualWinner={sf2Win} pts={12} color="#64b5f6"
+        ffPicks={ffPicks} onSet={set} locked={locked}/>
 
       <SectionTitle>🏆 The Final</SectionTitle>
-      <PickMatch title="Final — Who wins the World Cup?"
-        teamA={sf1Pick||sf1Winner} teamB={sf2Pick||sf2Winner} pickKey="champion"
-        actualWinner={finalMatch.winner} pts={15} color={GLD}/>
+      <PickMatchCard title="Final — Who wins the World Cup?"
+        teamA={finalA} teamB={finalB} pickKey="champion"
+        actualWinner={finalWin} pts={15} color="#FFD700"
+        ffPicks={ffPicks} onSet={set} locked={locked}/>
 
-      <SectionTitle>🥉 Consolation Match (3rd Place)</SectionTitle>
-      <PickMatch title="Consolation — Who wins 3rd place?"
-        teamA={sf1Pick ? (sf1Pick===sf1.teamA?sf1.teamB:sf1.teamA) : sf1Loser}
-        teamB={sf2Pick ? (sf2Pick===sf2.teamA?sf2.teamB:sf2.teamA) : sf2Loser}
-        pickKey="third"
-        actualWinner={consMatch.winner} pts={12} color="#b39ddb"/>
+      <SectionTitle>🥉 Consolation Match</SectionTitle>
+      <PickMatchCard title="3rd Place — Who wins the Consolation?"
+        teamA={consA||null} teamB={consB||null} pickKey="third"
+        actualWinner={consWin} pts={12} color="#b39ddb"
+        ffPicks={ffPicks} onSet={set} locked={locked}/>
 
-      <div style={{ background:"rgba(0,0,0,0.2)", border:"1px solid " + BORDER, borderRadius:12,
-        padding:"12px 16px", marginTop:4 }}>
-        <div style={{ color:"rgba(255,255,255,0.4)", fontSize:12, fontWeight:700, marginBottom:6 }}>
-          4th Place — Consolation Match Loser
-        </div>
-        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>
-          Automatically assigned — earns <span style={{ color:G4 }}>+5pts</span> if correct
-        </div>
-        {(thirdPick || consMatch.winner) && (
-          <div style={{ marginTop:8, display:"flex", alignItems:"center", gap:6 }}>
-            <Dot team={
-              consMatch.winner
-                ? (consMatch.teamA===consMatch.winner?consMatch.teamB:consMatch.teamA)
-                : thirdPick
-                  ? (thirdPick===(sf1Pick?(sf1Pick===sf1.teamA?sf1.teamB:sf1.teamA):sf1Loser)
-                    ? (sf2Pick?(sf2Pick===sf2.teamA?sf2.teamB:sf2.teamA):sf2Loser)
-                    : (sf1Pick?(sf1Pick===sf1.teamA?sf1.teamB:sf1.teamA):sf1Loser))
-                  : null
-            } size={8}/>
-            <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>
-              {consMatch.winner
-                ? (consMatch.teamA===consMatch.winner?consMatch.teamB:consMatch.teamA)
-                : "Loser of consolation match"}
-            </span>
-          </div>
-        )}
+      <div style={{ background:"rgba(0,0,0,0.2)", border:"1px solid "+BORDER, borderRadius:12, padding:"12px 16px" }}>
+        <div style={{ color:"rgba(255,255,255,0.4)", fontSize:12, fontWeight:700, marginBottom:4 }}>4th Place — Auto-assigned</div>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>Consolation match loser · <span style={{ color:G4 }}>+5pts</span> if correct</div>
       </div>
     </div>
   );
 }
-
-// ─── LEADERBOARD ──────────────────────────────────────────────────────────────
 
 function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks, myPicks }) {
   const [selected, setSelected] = useState(null);
