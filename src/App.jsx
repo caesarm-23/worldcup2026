@@ -2080,6 +2080,7 @@ export default function App() {
   const [bracket,setBracket]             = useState(null);
   const [bets,setBets]                   = useState([]);
   const [comparePlayer, setComparePlayer] = useState("");
+  const [adminAuth, setAdminAuth]         = useState(false);
   const [picks,setPicks] = useState({ groups:{}, bracket:{}, finalFour:{} });
 
   const loadAdmin = useCallback(async()=>{
