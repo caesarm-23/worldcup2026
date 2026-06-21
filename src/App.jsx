@@ -376,19 +376,24 @@ function TabBar({ tabs, active, onChange }) {
 // ─── CONF CHART ───────────────────────────────────────────────────────────────
 
 function GroupRulesCard() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   return (
     <div style={{ marginBottom:14 }}>
       <button onClick={()=>setOpen(o=>!o)} style={{
         width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center",
-        background:"rgba(0,90,43,0.4)", border:`1px solid rgba(0,166,81,0.3)`,
-        borderRadius:open?"10px 10px 0 0":10, padding:"10px 14px",
+        background:"rgba(0,90,43,0.45)", border:"1px solid rgba(0,166,81,0.45)",
+        borderRadius:open?"10px 10px 0 0":10, padding:"11px 14px",
         cursor:"pointer", fontFamily:"inherit", color:G4, fontWeight:800, fontSize:12,
+        boxShadow: open?"none":"0 0 0 1px rgba(0,166,81,0.15), 0 2px 8px rgba(0,166,81,0.15)",
       }}>
-        <span>📋 How Groups Work — FIFA Rules & Scoring</span>
+        <span style={{ display:"flex", alignItems:"center", gap:6 }}>
+          📋 How Groups Work — FIFA Rules & Scoring
+          {!open && <span style={{ background:"rgba(0,166,81,0.25)", color:G4, fontSize:9,
+            padding:"2px 7px", borderRadius:10, fontWeight:700 }}>tap to view</span>}
+        </span>
         <span style={{ fontSize:14, transition:"transform 0.2s", transform:open?"rotate(180deg)":"rotate(0deg)" }}>▾</span>
       </button>
-      {open && <div style={{ background:"rgba(0,0,0,0.35)", border:`1px solid rgba(0,166,81,0.25)`,
+      {open && <div style={{ background:"rgba(0,0,0,0.35)", border:"1px solid rgba(0,166,81,0.25)",
         borderTop:"none", borderRadius:"0 0 10px 10px", padding:"12px 14px",
         display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14 }}>
 
@@ -418,23 +423,46 @@ function GroupRulesCard() {
           </div>
         </div>
 
-        {/* Tiebreakers */}
+        {/* Tiebreakers — teams within a group */}
         <div>
           <div style={{ color:G4, fontWeight:800, fontSize:11, marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>
-            Tiebreaker Order
+            Tiebreakers (Within a Group)
+          </div>
+          {[
+            "1. Head-to-head points",
+            "2. Head-to-head goal difference",
+            "3. Head-to-head goals scored",
+            "4. Overall goal difference",
+            "5. Overall goals scored",
+            "6. Fair play (card) score",
+            "7. FIFA World Ranking",
+          ].map((t,i)=>(
+            <div key={i} style={{ fontSize:10, color:i===0?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.4)",
+              padding:"2px 0", lineHeight:1.5 }}>{t}</div>
+          ))}
+          <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:6, lineHeight:1.4 }}>
+            Head-to-head is checked first — only among the tied teams' matches against each other.
+          </div>
+        </div>
+
+        {/* Tiebreakers — best 3rd place teams */}
+        <div>
+          <div style={{ color:G4, fontWeight:800, fontSize:11, marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+            Best 3rd-Place Ranking
           </div>
           {[
             "1. Points",
             "2. Goal difference",
             "3. Goals scored",
-            "4. Head-to-head points",
-            "5. Head-to-head goal difference",
-            "6. Head-to-head goals scored",
-            "7. FIFA ranking / drawing of lots",
+            "4. Fair play (card) score",
+            "5. FIFA World Ranking",
           ].map((t,i)=>(
             <div key={i} style={{ fontSize:10, color:i===0?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.4)",
               padding:"2px 0", lineHeight:1.5 }}>{t}</div>
           ))}
+          <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:6, lineHeight:1.4 }}>
+            No head-to-head here — 3rd-place teams are from different groups and never played each other.
+          </div>
         </div>
 
         {/* Your Prediction Scoring */}
