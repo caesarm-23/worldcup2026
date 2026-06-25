@@ -2151,11 +2151,21 @@ export default function App() {
   const handleSave = async () => {
     if (locks?.groups || REGISTRATION_LOCKED) return;
     setSaving(true);
-    await saveEntry(name,pin,picks);
+    await saveEntry(name, pin, picks);
     await loadLeaderboard();
     setSaving(false);
     setShowSplash(true);
     setTimeout(()=>{ setShowSplash(false); setTab("leaderboard"); }, 2000);
+  };
+
+  const handleSaveKnockout = async () => {
+    if (locks?.knockout) return;
+    setSaving(true);
+    await saveEntry(name, pin, picks);
+    await loadLeaderboard();
+    setSaving(false);
+    setShowSplash(true);
+    setTimeout(()=>{ setShowSplash(false); }, 2000);
   };
 
   const handleDelete = async (playerName) => {
@@ -2236,8 +2246,13 @@ export default function App() {
             <div style={{ fontSize:22, fontWeight:900, color:G4 }}>{score.total}</div>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textTransform:"uppercase" }}>pts</div>
           </div>
-          <Btn onClick={handleSave} disabled={saving||locks?.groups} bg={G4} color={WHT}>
-            {saving?"Saving...":(locks?.groups||REGISTRATION_LOCKED)?"🔒 Locked":"Save Picks"}
+          <Btn
+            onClick={phase>=2 ? handleSaveKnockout : handleSave}
+            disabled={saving || (phase>=2 ? locks?.knockout : (locks?.groups||REGISTRATION_LOCKED))}
+            bg={G4} color={WHT}>
+            {saving?"Saving...":
+             phase>=2 ? (locks?.knockout?"🔒 Locked":"Save Picks") :
+             (locks?.groups||REGISTRATION_LOCKED)?"🔒 Locked":"Save Picks"}
           </Btn>
         </div>
       </div>
@@ -2282,6 +2297,19 @@ export default function App() {
               <BracketView bracket={bracket} bracketPicks={picks.bracket}
                 onPick={handleBracketPick} locked={locks?.knockout}
                 actualBracket={bracket}/>
+              {!locks?.knockout && (
+                <div style={{ position:"sticky", bottom:16, zIndex:10, marginTop:16, textAlign:"center" }}>
+                  <Btn onClick={handleSaveKnockout} disabled={saving}
+                    bg={G4} color={WHT}
+                    style={{ padding:"14px 40px", fontSize:15, fontWeight:900,
+                      boxShadow:"0 4px 20px rgba(0,166,81,0.5)", borderRadius:12 }}>
+                    {saving ? "Saving..." : "💾 Save My Bracket"}
+                  </Btn>
+                  <div style={{ color:"rgba(255,255,255,0.4)", fontSize:11, marginTop:6 }}>
+                    Pick all rounds first, then save once — picks lock before kickoff
+                  </div>
+                </div>
+              )}
             </>
         )}
 
@@ -2313,7 +2341,7 @@ export default function App() {
 
       </div>
 
-      {tab!=="leaderboard"&&tab!=="admin"&&tab!=="predictions"&&tab!=="bets"&&(
+      {tab!=="leaderboard"&&tab!=="admin"&&tab!=="predictions"&&tab!=="bets"&&tab!=="knockout"&&(
         <div style={{ marginTop:24, display:"flex", justifyContent:"center" }}>
           <Btn onClick={handleSave} disabled={saving||locks?.groups} bg={G4} color={WHT}
             style={{ minWidth:180, padding:"12px" }}>
