@@ -249,61 +249,53 @@ function calcMaxGroupScore(groupPicks) {
 }
 
 function calcBracketScore(bracketPicks, bracket) {
-  let earned = 0, max = 0;
-  if (!bracket || !bracketPicks) return { earned, max };
+  let earned = 0, potential = 0;
+  if (!bracket || !bracketPicks) return { earned, potential };
   BRACKET_ROUNDS.forEach(round => {
     const matches = bracket[round.key] || [];
     const picks   = bracketPicks[round.key] || {};
     matches.forEach((match, i) => {
       if (picks[i] != null) {
-        max += round.pts;
         if (match.winner) {
+          // Real result exists — only count if correct
           if (picks[i] === match.winner) earned += round.pts;
         } else {
-          earned += round.pts; // potential
+          // No real result yet — count as potential only
+          potential += round.pts;
         }
       }
     });
   });
-  return { earned, max };
+  return { earned, potential };
 }
 
 function calcScore(picks, actualFF, liveStandings, bracket) {
   const liveG = calcLiveGroupScore(picks.groups, liveStandings);
   const maxG  = calcMaxGroupScore(picks.groups);
-  const g = liveG !== null ? liveG : maxG;
+  const g = liveG !== null ? liveG : 0;
   const { earned: k } = calcBracketScore(picks.bracket, bracket);
 
-  // Final Four scoring — new format: sf1winner, sf2winner, champion, third
+  // Final Four — only count points when real results exist
   let f = 0;
   const ff = picks.finalFour || {};
   const sfs = bracket?.sf || [];
   const sf1Winner = sfs[0]?.winner || null;
   const sf2Winner = sfs[1]?.winner || null;
-  const sf1Loser  = sfs[0]?.winner ? (sfs[0].teamA===sfs[0].winner?sfs[0].teamB:sfs[0].teamA) : null;
-  const sf2Loser  = sfs[1]?.winner ? (sfs[1].teamA===sfs[1].winner?sfs[1].teamB:sfs[1].teamA) : null;
   const finalWinner = bracket?.final?.[0]?.winner || null;
   const consWinner  = bracket?.consolation?.[0]?.winner || null;
   const consLoser   = consWinner ? (bracket?.consolation?.[0]?.teamA===consWinner?bracket?.consolation?.[0]?.teamB:bracket?.consolation?.[0]?.teamA) : null;
 
-  // SF picks (12pts each)
+  // Only add points when the real winner is known
   if (sf1Winner && ff.sf1winner === sf1Winner) f += 12;
-  else if (!sf1Winner && ff.sf1winner) f += 12; // potential
   if (sf2Winner && ff.sf2winner === sf2Winner) f += 12;
-  else if (!sf2Winner && ff.sf2winner) f += 12;
-
-  // Champion (15pts)
   if (finalWinner && ff.champion === finalWinner) f += 15;
-  else if (!finalWinner && ff.champion) f += 15;
-
-  // 3rd place (12pts)
   if (consWinner && ff.third === consWinner) f += 12;
-  else if (!consWinner && ff.third) f += 12;
 
-  // 4th place (5pts) — auto derived
-  const playerFourth = ff.third ? (ff.third===(sf1Loser||"") ? sf2Loser : sf1Loser) : null;
+  // 4th place auto-derived
+  const sf1Loser = sfs[0]?.winner ? (sfs[0].teamA===sfs[0].winner?sfs[0].teamB:sfs[0].teamA) : null;
+  const sf2Loser = sfs[1]?.winner ? (sfs[1].teamA===sfs[1].winner?sfs[1].teamB:sfs[1].teamA) : null;
+  const playerFourth = ff.third ? (ff.third===sf1Loser ? sf2Loser : sf1Loser) : null;
   if (consLoser && playerFourth === consLoser) f += 5;
-  else if (!consLoser && playerFourth) f += 5;
 
   return { g, maxG, liveG, k, f, total: g + k + f };
 }
@@ -1000,7 +992,7 @@ function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks,
   return <div>
     <div style={{ color:"rgba(255,255,255,0.4)", fontSize:11, marginBottom:14, textAlign:"center" }}>
       {scored.length} player{scored.length!==1?"s":""} ·{" "}
-      {hasLive?"🔴 Live scoring active":"⚡ Max possible points shown"}
+      {hasLive ? "🔴 Live scoring active" : "Points update as results are confirmed"}
       {canViewPicks && <span style={{ color:G4 }}> · Click any name to see their picks</span>}
     </div>
     {scored.map((entry,i) => {
