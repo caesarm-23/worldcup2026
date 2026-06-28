@@ -597,26 +597,35 @@ function BracketMatchCard({ teamA, teamB, userPick, onPick, locked, actualWinner
     return (
       <div onClick={()=>{ if(canClick) onPick(team); }}
         style={{
-          display:"flex", alignItems:"center", gap:5, padding:"6px 8px",
+          display:"flex", alignItems:"center", gap:5, padding:"7px 8px",
           cursor: canClick ? "pointer" : "default",
-          background: isCorrect?"rgba(0,166,81,0.25)":isWrong?"rgba(220,50,50,0.15)":isPick?"rgba(255,255,255,0.1)":"transparent",
-          borderLeft: isPick ? "3px solid " + (isCorrect?G4:isWrong?"#ff5252":G4) : "3px solid transparent",
+          background: isCorrect?"rgba(0,166,81,0.3)":isWrong?"rgba(220,50,50,0.2)":isPick?"rgba(255,255,255,0.15)":isActual?"rgba(255,215,0,0.1)":"transparent",
+          borderLeft: isCorrect?"3px solid #00a651":isWrong?"3px solid #ff5252":isPick?"3px solid #00a651":isActual?"3px solid #FFD700":"3px solid transparent",
           transition:"background 0.15s",
         }}>
         <Dot team={team} size={7}/>
-        <span style={{ flex:1, fontSize:11, fontWeight:isPick?700:400,
-          color: isActual&&actualWinner?GLD : isWrong?"rgba(255,255,255,0.3)":WHT,
-          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
-          maxWidth:100 }}>{team}</span>
-        {isCorrect && <span style={{ fontSize:9, color:G4, fontWeight:800, flexShrink:0 }}>✓+{roundPts}</span>}
-        {isWrong   && <span style={{ fontSize:9, color:"#ff5252", flexShrink:0 }}>✗</span>}
-        {isActual && !isPick && <span style={{ fontSize:9, flexShrink:0 }}>🏆</span>}
+        <span style={{
+          flex:1, fontSize:11,
+          fontWeight: isPick||isActual ? 800 : 400,
+          color: isActual ? GLD : isWrong ? "rgba(255,255,255,0.3)" : isPick ? WHT : "rgba(255,255,255,0.7)",
+          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:90,
+          textDecoration: isWrong ? "line-through" : "none"
+        }}>{team}</span>
+        {isCorrect  && <span style={{ fontSize:9, color:G4, fontWeight:900, flexShrink:0 }}>✓+{roundPts}</span>}
+        {isWrong    && <span style={{ fontSize:9, color:"#ff5252", flexShrink:0 }}>✗</span>}
+        {isActual && !isPick && <span style={{ fontSize:9, color:GLD, fontWeight:800, flexShrink:0 }}>🏆 W</span>}
+        {isPick && !actualWinner && <span style={{ fontSize:9, color:"rgba(255,255,255,0.5)", flexShrink:0 }}>← pick</span>}
       </div>
     );
   };
 
   return (
-    <div style={{ background:CARD, border:"1px solid " + BORDER, borderRadius:8, overflow:"hidden", width:160 }}>
+    <div style={{
+      background: actualWinner ? "rgba(0,0,0,0.4)" : userPick ? "rgba(0,90,43,0.5)" : CARD,
+      border: "1px solid " + (actualWinner ? "rgba(255,215,0,0.2)" : userPick ? "rgba(0,166,81,0.4)" : BORDER),
+      borderRadius:8, overflow:"hidden", width:160,
+      boxShadow: userPick && !actualWinner ? "0 0 8px rgba(0,166,81,0.2)" : "none"
+    }}>
       {teamRow(teamA)}
       <div style={{ height:1, background:BORDER }}/>
       {teamRow(teamB)}
@@ -762,22 +771,40 @@ function PickMatchCard({ title, teamA, teamB, pickKey, actualWinner, pts, color,
     return (
       <button key={team} onClick={()=>onSet(pickKey, team)} disabled={locked||!teamA||!teamB}
         style={{
-          flex:1, padding:"10px 8px", borderRadius:8, cursor:locked?"default":"pointer",
-          background: isCorrect?"rgba(0,166,81,0.25)":isWrong?"rgba(220,50,50,0.15)":isPick?"rgba(255,255,255,0.1)":"rgba(0,0,0,0.2)",
-          border: "1px solid " + (isCorrect?G4:isWrong?"#ff5252":isPick?G4:BORDER),
-          color: isActual?GLD:isWrong?"rgba(255,255,255,0.3)":WHT,
-          fontWeight:isPick?800:400, fontSize:12, fontFamily:"inherit", transition:"all 0.15s",
-          display:"flex", alignItems:"center", justifyContent:"center", gap:5, flexWrap:"wrap"
+          flex:1, padding:"10px 8px", borderRadius:8,
+          cursor: locked||!teamA||!teamB ? "default" : "pointer",
+          background: isCorrect?"rgba(0,166,81,0.3)":isWrong?"rgba(220,50,50,0.2)":isPick?"rgba(0,166,81,0.2)":isActual?"rgba(255,215,0,0.1)":"rgba(0,0,0,0.2)",
+          border: "2px solid " + (isCorrect?G4:isWrong?"#ff5252":isPick?G4:isActual?GLD:BORDER),
+          color: isActual?GLD:isWrong?"rgba(255,255,255,0.3)":isPick?WHT:"rgba(255,255,255,0.6)",
+          fontWeight: isPick||isActual ? 900 : 400,
+          fontSize:12, fontFamily:"inherit", transition:"all 0.15s",
+          display:"flex", alignItems:"center", justifyContent:"center", gap:5, flexWrap:"wrap",
+          boxShadow: isPick && !actualWinner ? "0 0 10px rgba(0,166,81,0.3)" : "none"
         }}>
-        <Dot team={team} size={8}/>{team}
-        {isCorrect && <span style={{ color:G4, fontSize:10, fontWeight:800 }}>✓+{pts}</span>}
+        <Dot team={team} size={8}/>
+        <span style={{ textDecoration: isWrong?"line-through":"none" }}>{team}</span>
+        {isPick && !actualWinner && <span style={{ fontSize:9, background:"rgba(0,166,81,0.3)",
+          borderRadius:4, padding:"1px 5px", color:G4, fontWeight:800 }}>MY PICK</span>}
+        {isCorrect && <span style={{ color:G4, fontSize:10, fontWeight:800 }}>✓ +{pts}pts</span>}
         {isWrong   && <span style={{ color:"#ff5252", fontSize:10 }}>✗</span>}
-        {isActual && !isPick && <span style={{ fontSize:10 }}>🏆</span>}
+        {isActual && !isPick && <span style={{ fontSize:10, color:GLD, fontWeight:800 }}>🏆 Winner</span>}
       </button>
     );
   };
   return (
     <div style={{ background:CARD, border:"1px solid "+BORDER, borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
+      {actualWinner && (
+        <div style={{ display:"flex", alignItems:"center", gap:8, background:"rgba(255,215,0,0.12)",
+          border:"1px solid rgba(255,215,0,0.35)", borderRadius:8, padding:"7px 12px", marginBottom:10 }}>
+          <span style={{ fontSize:16 }}>🏆</span>
+          <div>
+            <div style={{ color:GLD, fontWeight:900, fontSize:13 }}>{actualWinner} advances</div>
+            <div style={{ color:"rgba(255,255,255,0.4)", fontSize:10 }}>
+              {pick===actualWinner ? "Your pick was correct! +"+pts+"pts" : pick ? "You picked "+pick+" — incorrect" : "You did not pick this match"}
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div style={{ color, fontWeight:800, fontSize:13 }}>{title}</div>
         <div style={{ background:"rgba(0,0,0,0.3)", border:"1px solid "+BORDER,
@@ -1652,7 +1679,7 @@ function BetsTab({ entries, myName, bets, onBetsChange, adminAuth }) {
 
 
 
-function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, auth, onAuth }) {
+function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, auth, onAuth, entries }) {
   const [pass,setPass]     = useState("");
   const [msg,setMsg]       = useState("");
   const [saving,setSaving] = useState(false);
@@ -1918,7 +1945,7 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, 
     </div>
 
     {/* ── PLAYERS: PINs & Delete ── */}
-    <PlayerManager onDelete={async(playerName)=>{
+    <PlayerManager entries={entries} phase={phase} onDelete={async(playerName)=>{
       await sb(`picks?name=eq.${encodeURIComponent(playerName)}`, {
         method:"DELETE",
         headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}`, "Content-Type":"application/json" },
@@ -1928,7 +1955,7 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, 
   </div>;
 }
 
-function PlayerManager({ onDelete }) {
+function PlayerManager({ onDelete, entries, phase }) {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -1939,36 +1966,75 @@ function PlayerManager({ onDelete }) {
   if (loading) return <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10,
     padding:"14px 16px", marginTop:14, color:"rgba(255,255,255,0.4)", fontSize:12 }}>Loading players...</div>;
 
+  const submitted = players.filter(p => {
+    const entry = entries?.find(e=>e.name===p.name);
+    const bp = entry?.picks?.bracket || {};
+    // Require all 31 picks: 16 R32 + 8 R16 + 4 QF + 2 SF + 1 Final
+    const required = { r32:16, r16:8, qf:4, sf:2, final:1 };
+    return Object.entries(required).every(([round, count]) =>
+      Object.keys(bp[round]||{}).length >= count
+    );
+  }).length;
+
   return <div style={{ background:CARD, border:"1px solid rgba(255,215,0,0.25)", borderRadius:10, padding:"14px 16px", marginTop:14 }}>
     <SectionTitle>👥 Players — PINs & Account Management</SectionTitle>
+    {phase >= 2 && (
+      <div style={{ background:"rgba(0,0,0,0.3)", border:`1px solid ${BORDER}`, borderRadius:8,
+        padding:"10px 14px", marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ color:"rgba(255,255,255,0.5)", fontSize:12 }}>Knockout bracket submitted</span>
+        <span style={{ fontWeight:900, fontSize:16,
+          color: submitted===players.length ? G4 : submitted > 0 ? GLD : "rgba(255,255,255,0.4)" }}>
+          {submitted}/{players.length}
+        </span>
+      </div>
+    )}
     <div style={{ color:"rgba(255,255,255,0.35)", fontSize:10, marginBottom:12 }}>
-      Use this to help players who are locked out of their account. 🗑️ removes duplicate accounts.
+      Use this to help players who are locked out. 🗑️ removes duplicate accounts.
     </div>
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
       {players.length===0 && <div style={{ color:"rgba(255,255,255,0.3)", fontSize:12 }}>No players yet.</div>}
-      {players.map((p,i) => (
-        <div key={p.name} style={{ display:"flex", alignItems:"center", gap:10,
-          background:"rgba(0,0,0,0.2)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"10px 14px" }}>
-          <div style={{ fontSize:14, width:24, textAlign:"center", flexShrink:0 }}>
-            {["🥇","🥈","🥉"][i]||<span style={{ color:"rgba(255,255,255,0.3)", fontSize:11 }}>#{i+1}</span>}
+      {players.map((p,i) => {
+        const entry = entries?.find(e=>e.name===p.name);
+        const bp = entry?.picks?.bracket || {};
+        const required = { r32:16, r16:8, qf:4, sf:2, final:1 };
+        const hasBracket = Object.entries(required).every(([round, count]) =>
+          Object.keys(bp[round]||{}).length >= count
+        );
+        return (
+          <div key={p.name} style={{ display:"flex", alignItems:"center", gap:10,
+            background:"rgba(0,0,0,0.2)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"10px 14px" }}>
+            <div style={{ fontSize:14, width:24, textAlign:"center", flexShrink:0 }}>
+              {["🥇","🥈","🥉"][i]||<span style={{ color:"rgba(255,255,255,0.3)", fontSize:11 }}>#{i+1}</span>}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, fontSize:13, color:WHT }}>{p.name}</div>
+            </div>
+            {/* Knockout status */}
+            {phase >= 2 && (
+              <div style={{
+                background: hasBracket?"rgba(0,166,81,0.15)":"rgba(220,50,50,0.1)",
+                border: "1px solid " + (hasBracket?"rgba(0,166,81,0.4)":"rgba(220,50,50,0.3)"),
+                borderRadius:6, padding:"3px 10px", fontSize:11,
+                color: hasBracket?G4:"#ff8a80", fontWeight:700, flexShrink:0
+              }}>
+                {hasBracket ? "✓ Bracket" : "✗ No bracket"}
+              </div>
+            )}
+            <div style={{ background:"rgba(255,215,0,0.12)", border:"1px solid rgba(255,215,0,0.3)",
+              borderRadius:6, padding:"3px 10px", fontSize:12, color:GLD, fontWeight:800, letterSpacing:"3px" }}>
+              {p.pin || "—"}
+            </div>
+            <button onClick={()=>{ if(window.confirm(`Delete ${p.name}? This cannot be undone.`)){
+              onDelete(p.name);
+              setPlayers(prev=>prev.filter(x=>x.name!==p.name));
+            }}} style={{ background:"rgba(220,50,50,0.12)", border:"1px solid rgba(220,50,50,0.3)",
+              borderRadius:8, padding:"6px 12px", cursor:"pointer", color:"#ff8a80",
+              fontSize:14, fontFamily:"inherit", flexShrink:0 }}>
+              🗑️
+            </button>
           </div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontWeight:700, fontSize:13, color:WHT }}>{p.name}</div>
-          </div>
-          <div style={{ background:"rgba(255,215,0,0.12)", border:"1px solid rgba(255,215,0,0.3)",
-            borderRadius:6, padding:"3px 10px", fontSize:12, color:GLD, fontWeight:800, letterSpacing:"3px" }}>
-            {p.pin || "—"}
-          </div>
-          <button onClick={()=>{ if(window.confirm(`Delete ${p.name}? This cannot be undone.`)){
-            onDelete(p.name);
-            setPlayers(prev=>prev.filter(x=>x.name!==p.name));
-          }}} style={{ background:"rgba(220,50,50,0.12)", border:"1px solid rgba(220,50,50,0.3)",
-            borderRadius:8, padding:"6px 12px", cursor:"pointer", color:"#ff8a80",
-            fontSize:14, fontFamily:"inherit", flexShrink:0 }}>
-            🗑️
-          </button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   </div>;
 }
@@ -2329,6 +2395,7 @@ export default function App() {
 
         {tab==="admin"&&<AdminPanel phase={phase} actualFF={actualFF}
           liveStandings={liveStandings} locks={locks} bracket={bracket}
+          entries={entries}
           onUpdate={handleAdminUpdate} auth={adminAuth} onAuth={setAdminAuth}/>}
 
       </div>
