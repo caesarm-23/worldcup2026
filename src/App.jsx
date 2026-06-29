@@ -584,15 +584,17 @@ function GroupPicker({ picks, onChange, liveStandings, locked, comparePicks, com
 // ─── BRACKET MATCH CARD (compact) ────────────────────────────────────────────
 
 function BracketMatchCard({ teamA, teamB, userPick, onPick, locked, actualWinner, roundPts, readOnly }) {
+  // Guard against string "null" from Supabase manual edits
+  const realWinner = (actualWinner && actualWinner !== "null") ? actualWinner : null;
   const teamRow = (team) => {
     if (!team) return (
       <div style={{ padding:"6px 8px", color:"rgba(255,255,255,0.2)", fontSize:10, fontStyle:"italic" }}>TBD</div>
     );
     const isPick     = userPick === team;
-    const isCorrect  = isPick && actualWinner && actualWinner === team;
-    const isWrong    = isPick && actualWinner && actualWinner !== team;
-    const isActual   = actualWinner === team;
-    const canClick   = !locked && !readOnly && teamA && teamB && !actualWinner;
+    const isCorrect  = isPick && realWinner && realWinner === team;
+    const isWrong    = isPick && realWinner && realWinner !== team;
+    const isActual   = realWinner === team;
+    const canClick   = !locked && !readOnly && teamA && teamB && !realWinner;
 
     return (
       <div onClick={()=>{ if(canClick) onPick(team); }}
@@ -614,17 +616,17 @@ function BracketMatchCard({ teamA, teamB, userPick, onPick, locked, actualWinner
         {isCorrect  && <span style={{ fontSize:9, color:G4, fontWeight:900, flexShrink:0 }}>✓+{roundPts}</span>}
         {isWrong    && <span style={{ fontSize:9, color:"#ff5252", flexShrink:0 }}>✗</span>}
         {isActual && !isPick && <span style={{ fontSize:9, color:GLD, fontWeight:800, flexShrink:0 }}>🏆 W</span>}
-        {isPick && !actualWinner && <span style={{ fontSize:9, color:"rgba(255,255,255,0.5)", flexShrink:0 }}>← pick</span>}
+        {isPick && !realWinner && <span style={{ fontSize:9, color:"rgba(255,255,255,0.5)", flexShrink:0 }}>← pick</span>}
       </div>
     );
   };
 
   return (
     <div style={{
-      background: actualWinner ? "rgba(0,0,0,0.4)" : userPick ? "rgba(0,90,43,0.5)" : CARD,
-      border: "1px solid " + (actualWinner ? "rgba(255,215,0,0.2)" : userPick ? "rgba(0,166,81,0.4)" : BORDER),
+      background: realWinner ? "rgba(0,0,0,0.4)" : userPick ? "rgba(0,90,43,0.5)" : CARD,
+      border: "1px solid " + (realWinner ? "rgba(255,215,0,0.2)" : userPick ? "rgba(0,166,81,0.4)" : BORDER),
       borderRadius:8, overflow:"hidden", width:160,
-      boxShadow: userPick && !actualWinner ? "0 0 8px rgba(0,166,81,0.2)" : "none"
+      boxShadow: userPick && !realWinner ? "0 0 8px rgba(0,166,81,0.2)" : "none"
     }}>
       {teamRow(teamA)}
       <div style={{ height:1, background:BORDER }}/>
@@ -1891,7 +1893,8 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, 
             <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
               {matches.map((match,i)=>{
                 if(!match.teamA&&!match.teamB) return null;
-                return <div key={i} style={{ background:"rgba(0,0,0,0.25)", border:`1px solid ${BORDER}`,
+                const hasWinner = match.winner && match.winner !== "null";
+                return <div key={i} style={{ background:"rgba(0,0,0,0.25)", border:`1px solid ${hasWinner?GLD:BORDER}`,
                   borderRadius:8, padding:"8px 12px", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
                   <span style={{ color:"rgba(255,255,255,0.3)", fontSize:10, flexShrink:0 }}>M{i+1}:</span>
                   {[match.teamA,match.teamB].filter(Boolean).map(team=>(
@@ -1904,6 +1907,13 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, 
                       fontFamily:"inherit", display:"flex", alignItems:"center", gap:4
                     }}><Dot team={team} size={7}/>{team}{match.winner===team&&" 🏆"}</button>
                   ))}
+                  {hasWinner && (
+                    <button onClick={()=>setWinner(round.key,i,null)} style={{
+                      background:"rgba(220,50,50,0.15)", border:"1px solid rgba(220,50,50,0.4)",
+                      borderRadius:6, padding:"5px 8px", cursor:"pointer",
+                      color:"#ff8a80", fontSize:11, fontFamily:"inherit"
+                    }}>✕ clear</button>
+                  )}
                 </div>;
               })}
             </div>
