@@ -1979,22 +1979,37 @@ function PlayerManager({ onDelete, entries, phase }) {
   const submitted = players.filter(p => {
     const entry = entries?.find(e=>e.name===p.name);
     const bp = entry?.picks?.bracket || {};
-    // Require all 31 picks: 16 R32 + 8 R16 + 4 QF + 2 SF + 1 Final
     const required = { r32:16, r16:8, qf:4, sf:2, final:1 };
     return Object.entries(required).every(([round, count]) =>
       Object.keys(bp[round]||{}).length >= count
     );
   }).length;
 
+  const ffSubmitted = players.filter(p => {
+    const entry = entries?.find(e=>e.name===p.name);
+    const ff = entry?.picks?.finalFour || {};
+    return ["sf1winner","sf2winner","champion","third"].every(k => ff[k]);
+  }).length;
+
   return <div style={{ background:CARD, border:"1px solid rgba(255,215,0,0.25)", borderRadius:10, padding:"14px 16px", marginTop:14 }}>
     <SectionTitle>👥 Players — PINs & Account Management</SectionTitle>
     {phase >= 2 && (
       <div style={{ background:"rgba(0,0,0,0.3)", border:`1px solid ${BORDER}`, borderRadius:8,
-        padding:"10px 14px", marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        padding:"10px 14px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <span style={{ color:"rgba(255,255,255,0.5)", fontSize:12 }}>Knockout bracket submitted</span>
         <span style={{ fontWeight:900, fontSize:16,
           color: submitted===players.length ? G4 : submitted > 0 ? GLD : "rgba(255,255,255,0.4)" }}>
           {submitted}/{players.length}
+        </span>
+      </div>
+    )}
+    {phase >= 3 && (
+      <div style={{ background:"rgba(0,0,0,0.3)", border:`1px solid rgba(255,215,0,0.3)`, borderRadius:8,
+        padding:"10px 14px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={{ color:"rgba(255,255,255,0.5)", fontSize:12 }}>Final Four picks submitted</span>
+        <span style={{ fontWeight:900, fontSize:16,
+          color: ffSubmitted===players.length ? G4 : ffSubmitted > 0 ? GLD : "rgba(255,255,255,0.4)" }}>
+          {ffSubmitted}/{players.length}
         </span>
       </div>
     )}
@@ -2010,6 +2025,8 @@ function PlayerManager({ onDelete, entries, phase }) {
         const hasBracket = Object.entries(required).every(([round, count]) =>
           Object.keys(bp[round]||{}).length >= count
         );
+        const ff = entry?.picks?.finalFour || {};
+        const hasFF = ["sf1winner","sf2winner","champion","third"].every(k => ff[k]);
         return (
           <div key={p.name} style={{ display:"flex", alignItems:"center", gap:10,
             background:"rgba(0,0,0,0.2)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"10px 14px" }}>
@@ -2019,7 +2036,6 @@ function PlayerManager({ onDelete, entries, phase }) {
             <div style={{ flex:1 }}>
               <div style={{ fontWeight:700, fontSize:13, color:WHT }}>{p.name}</div>
             </div>
-            {/* Knockout status */}
             {phase >= 2 && (
               <div style={{
                 background: hasBracket?"rgba(0,166,81,0.15)":"rgba(220,50,50,0.1)",
@@ -2028,6 +2044,16 @@ function PlayerManager({ onDelete, entries, phase }) {
                 color: hasBracket?G4:"#ff8a80", fontWeight:700, flexShrink:0
               }}>
                 {hasBracket ? "✓ Bracket" : "✗ No bracket"}
+              </div>
+            )}
+            {phase >= 3 && (
+              <div style={{
+                background: hasFF?"rgba(255,215,0,0.12)":"rgba(220,50,50,0.1)",
+                border: "1px solid " + (hasFF?"rgba(255,215,0,0.4)":"rgba(220,50,50,0.3)"),
+                borderRadius:6, padding:"3px 10px", fontSize:11,
+                color: hasFF?GLD:"#ff8a80", fontWeight:700, flexShrink:0
+              }}>
+                {hasFF ? "✓ Final 4" : "✗ No Final 4"}
               </div>
             )}
             <div style={{ background:"rgba(255,215,0,0.12)", border:"1px solid rgba(255,215,0,0.3)",
