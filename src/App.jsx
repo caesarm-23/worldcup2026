@@ -275,26 +275,38 @@ function calcScore(picks, actualFF, liveStandings, bracket) {
   const g = liveG !== null ? liveG : 0;
   const { earned: k } = calcBracketScore(picks.bracket, bracket);
 
-  // Final Four — only count points when real results exist
+  // Final Four — scoring by finishing position only (not SF picks)
   let f = 0;
   const ff = picks.finalFour || {};
   const sfs = bracket?.sf || [];
   const sf1Winner = sfs[0]?.winner || null;
   const sf2Winner = sfs[1]?.winner || null;
+  const sf1Loser  = sf1Winner ? (sfs[0].teamA===sf1Winner?sfs[0].teamB:sfs[0].teamA) : null;
+  const sf2Loser  = sf2Winner ? (sfs[1].teamA===sf2Winner?sfs[1].teamB:sfs[1].teamA) : null;
   const finalWinner = bracket?.final?.[0]?.winner || null;
+  const finalLoser  = finalWinner ? (bracket?.final?.[0]?.teamA===finalWinner?bracket?.final?.[0]?.teamB:bracket?.final?.[0]?.teamA) : null;
   const consWinner  = bracket?.consolation?.[0]?.winner || null;
   const consLoser   = consWinner ? (bracket?.consolation?.[0]?.teamA===consWinner?bracket?.consolation?.[0]?.teamB:bracket?.consolation?.[0]?.teamA) : null;
 
-  // Only add points when the real winner is known
-  if (sf1Winner && ff.sf1winner === sf1Winner) f += 12;
-  if (sf2Winner && ff.sf2winner === sf2Winner) f += 12;
+  // Champion — 15pts (picked via "champion" key)
   if (finalWinner && ff.champion === finalWinner) f += 15;
+
+  // Runner-Up — 7pts (Final loser = whoever the player's champion pick lost to)
+  // The runner-up is whichever SF winner the player picked that isn't the champion
+  const playerRunnerUp = ff.champion
+    ? (ff.champion === (ff.sf1winner||null) ? (ff.sf2winner||null) : (ff.sf1winner||null))
+    : null;
+  if (finalLoser && playerRunnerUp === finalLoser) f += 7;
+
+  // 3rd place — 12pts (picked via "third" key)
   if (consWinner && ff.third === consWinner) f += 12;
 
-  // 4th place auto-derived
-  const sf1Loser = sfs[0]?.winner ? (sfs[0].teamA===sfs[0].winner?sfs[0].teamB:sfs[0].teamA) : null;
-  const sf2Loser = sfs[1]?.winner ? (sfs[1].teamA===sfs[1].winner?sfs[1].teamB:sfs[1].teamA) : null;
-  const playerFourth = ff.third ? (ff.third===sf1Loser ? sf2Loser : sf1Loser) : null;
+  // 4th place — 5pts (consolation loser, auto-derived)
+  const playerFourth = ff.third
+    ? (ff.third === (ff.sf1winner ? (sfs[0]?.teamA===ff.sf1winner?sfs[0]?.teamB:sfs[0]?.teamA) : sf1Loser)
+        ? (ff.sf2winner ? (sfs[1]?.teamA===ff.sf2winner?sfs[1]?.teamB:sfs[1]?.teamA) : sf2Loser)
+        : (ff.sf1winner ? (sfs[0]?.teamA===ff.sf1winner?sfs[0]?.teamB:sfs[0]?.teamA) : sf1Loser))
+    : null;
   if (consLoser && playerFourth === consLoser) f += 5;
 
   return { g, maxG, liveG, k, f, total: g + k + f };
@@ -809,8 +821,10 @@ function PickMatchCard({ title, teamA, teamB, pickKey, actualWinner, pts, color,
       )}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div style={{ color, fontWeight:800, fontSize:13 }}>{title}</div>
-        <div style={{ background:"rgba(0,0,0,0.3)", border:"1px solid "+BORDER,
-          borderRadius:20, padding:"2px 10px", color:G4, fontSize:11, fontWeight:700 }}>+{pts} pts</div>
+        {pts != null && <div style={{ background:"rgba(0,0,0,0.3)", border:"1px solid "+BORDER,
+          borderRadius:20, padding:"2px 10px", color:G4, fontSize:11, fontWeight:700 }}>+{pts} pts</div>}
+        {pts == null && <div style={{ background:"rgba(0,0,0,0.2)", border:"1px solid "+BORDER,
+          borderRadius:20, padding:"2px 10px", color:"rgba(255,255,255,0.3)", fontSize:11 }}>sets up Final</div>}
       </div>
       <div style={{ display:"flex", gap:8 }}>
         {mkBtn(teamA)}
@@ -858,37 +872,51 @@ function FinalFourPicker({ actualFF, ffPicks, onChange, locked, bracket, actualB
     <div>
       {locked && <LockedBanner/>}
       <InfoBox>
-        <strong style={{ color:G4 }}>Final Four</strong> — Pick SF winners, then the Final and Consolation.
-        3rd place earns <strong style={{ color:WHT }}>12pts</strong> — more than 2nd (7pts).
+        <strong style={{ color:G4 }}>Final Four</strong> — Pick the winner of each semifinal to set up your Final and Consolation picks.
+        Scoring is based on <strong style={{ color:WHT }}>finishing position only</strong> — not the SF picks themselves.
+        Champion=15pts · 3rd place=12pts · Runner-Up=7pts · 4th place=5pts
       </InfoBox>
+
+      {/* Scoring summary */}
+      <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }}>
+        {[["🥇 Champion","15pts","#FFD700"],["🥉 3rd Place","12pts","#b39ddb"],["🥈 Runner-Up","7pts","#C0C0C0"],["4th Place","5pts","rgba(255,255,255,0.4)"]].map(([label,pts,color])=>(
+          <div key={label} style={{ background:"rgba(0,0,0,0.25)", border:"1px solid "+BORDER,
+            borderRadius:8, padding:"6px 12px", display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ fontSize:11, color:"rgba(255,255,255,0.5)" }}>{label}</span>
+            <span style={{ fontSize:13, fontWeight:800, color }}>{pts}</span>
+          </div>
+        ))}
+      </div>
 
       <SectionTitle>⚽ Semifinal 1</SectionTitle>
       <PickMatchCard title="SF1 — Who goes to the Final?"
         teamA={sf1.teamA||null} teamB={sf1.teamB||null} pickKey="sf1winner"
-        actualWinner={sf1Win} pts={12} color="#64b5f6"
+        actualWinner={sf1Win} pts={null} color="#64b5f6"
         ffPicks={ffPicks} onSet={set} locked={locked}/>
 
       <SectionTitle>⚽ Semifinal 2</SectionTitle>
       <PickMatchCard title="SF2 — Who goes to the Final?"
         teamA={sf2.teamA||null} teamB={sf2.teamB||null} pickKey="sf2winner"
-        actualWinner={sf2Win} pts={12} color="#64b5f6"
+        actualWinner={sf2Win} pts={null} color="#64b5f6"
         ffPicks={ffPicks} onSet={set} locked={locked}/>
 
-      <SectionTitle>🏆 The Final</SectionTitle>
+      <SectionTitle>🏆 The Final — 15pts</SectionTitle>
       <PickMatchCard title="Final — Who wins the World Cup?"
         teamA={finalA} teamB={finalB} pickKey="champion"
         actualWinner={finalWin} pts={15} color="#FFD700"
         ffPicks={ffPicks} onSet={set} locked={locked}/>
 
-      <SectionTitle>🥉 Consolation Match</SectionTitle>
+      <SectionTitle>🥉 Consolation Match — 12pts</SectionTitle>
       <PickMatchCard title="3rd Place — Who wins the Consolation?"
         teamA={consA||null} teamB={consB||null} pickKey="third"
         actualWinner={consWin} pts={12} color="#b39ddb"
         ffPicks={ffPicks} onSet={set} locked={locked}/>
 
       <div style={{ background:"rgba(0,0,0,0.2)", border:"1px solid "+BORDER, borderRadius:12, padding:"12px 16px" }}>
-        <div style={{ color:"rgba(255,255,255,0.4)", fontSize:12, fontWeight:700, marginBottom:4 }}>4th Place — Auto-assigned</div>
-        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>Consolation match loser · <span style={{ color:G4 }}>+5pts</span> if correct</div>
+        <div style={{ color:"rgba(255,255,255,0.4)", fontSize:12, fontWeight:700, marginBottom:4 }}>🥈 Runner-Up — 7pts &nbsp;·&nbsp; 4th Place — 5pts</div>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>
+          Runner-Up = Final loser · 4th Place = Consolation loser · Both auto-assigned from your picks above
+        </div>
       </div>
     </div>
   );
