@@ -1007,8 +1007,22 @@ function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks,
         <div style={{ marginBottom:20 }}/>
       </>}
 
-      {p.finalFour && Object.keys(p.finalFour).length>0 && <>
+      {locks?.finalFour && p.finalFour && Object.keys(p.finalFour).length>0 && <>
         <SectionTitle>Final Four Picks</SectionTitle>
+
+      {!locks?.finalFour && (
+        <div style={{ background:"rgba(255,215,0,0.08)", border:"1px solid rgba(255,215,0,0.25)",
+          borderRadius:10, padding:"14px 16px", marginBottom:20,
+          display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ fontSize:18 }}>🔒</span>
+          <div>
+            <div style={{ color:GLD, fontWeight:700, fontSize:13 }}>Final Four picks are hidden</div>
+            <div style={{ color:"rgba(255,255,255,0.4)", fontSize:11, marginTop:2 }}>
+              The admin will reveal everyone's picks once submissions are locked
+            </div>
+          </div>
+        </div>
+      )}
         <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:20 }}>
           {[
             { key:"sf1winner", label:"SF1 Winner", pts:12 },
@@ -2503,4 +2517,3 @@ export default function App() {
     </div>
   </div>;
 }
-// Sat Jul 11 23:31:27 CDT 2026
