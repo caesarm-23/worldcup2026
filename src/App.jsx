@@ -1812,8 +1812,9 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, 
       <SectionTitle>🔒 Pick Locks</SectionTitle>
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
         {[
-          { key:"groups",   label:"Group Stage Picks", desc:"Lock before June 11 kickoff" },
-          { key:"knockout", label:"Knockout Picks",    desc:"Lock when bracket is set" },
+          { key:"groups",    label:"Group Stage Picks",  desc:"Lock before June 11 kickoff" },
+          { key:"knockout",  label:"Knockout Picks",     desc:"Lock when bracket is set" },
+          { key:"finalFour", label:"Final Four Picks",   desc:"Lock before semifinals kickoff" },
         ].map(({ key, label, desc }) => {
           const isLocked = locks?.[key];
           return <div key={key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
@@ -2226,7 +2227,7 @@ export default function App() {
   const [phase,setPhase]     = useState(1);
   const [actualFF,setActualFF]           = useState(null);
   const [liveStandings,setLiveStandings] = useState(null);
-  const [locks,setLocks]                 = useState({ groups:false, knockout:false });
+  const [locks,setLocks]                 = useState({ groups:false, knockout:false, finalFour:false });
   const [bracket,setBracket]             = useState(null);
   const [bets,setBets]                   = useState([]);
   const [comparePlayer, setComparePlayer] = useState("");
@@ -2239,7 +2240,7 @@ export default function App() {
       if(s.phase!=null)                    setPhase(s.phase);
       setActualFF(s.actualFF||null);
       setLiveStandings(s.liveStandings||null);
-      setLocks(s.locks||{ groups:false, knockout:false });
+      setLocks(s.locks||{ groups:false, knockout:false, finalFour:false });
       setBracket(s.bracket||null);
       if(Array.isArray(s.bets))            setBets(s.bets);
     }
@@ -2282,6 +2283,16 @@ export default function App() {
 
   const handleSaveKnockout = async () => {
     if (locks?.knockout) return;
+    setSaving(true);
+    await saveEntry(name, pin, picks);
+    await loadLeaderboard();
+    setSaving(false);
+    setShowSplash(true);
+    setTimeout(()=>{ setShowSplash(false); }, 2000);
+  };
+
+  const handleSaveFinalFour = async () => {
+    if (locks?.finalFour) return;
     setSaving(true);
     await saveEntry(name, pin, picks);
     await loadLeaderboard();
@@ -2369,10 +2380,11 @@ export default function App() {
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textTransform:"uppercase" }}>pts</div>
           </div>
           <Btn
-            onClick={phase>=2 ? handleSaveKnockout : handleSave}
-            disabled={saving || (phase>=2 ? locks?.knockout : (locks?.groups||REGISTRATION_LOCKED))}
+            onClick={phase>=3 ? handleSaveFinalFour : phase>=2 ? handleSaveKnockout : handleSave}
+            disabled={saving || (phase>=3 ? locks?.finalFour : phase>=2 ? locks?.knockout : (locks?.groups||REGISTRATION_LOCKED))}
             bg={G4} color={WHT}>
             {saving?"Saving...":
+             phase>=3 ? (locks?.finalFour?"🔒 Locked":"Save Picks") :
              phase>=2 ? (locks?.knockout?"🔒 Locked":"Save Picks") :
              (locks?.groups||REGISTRATION_LOCKED)?"🔒 Locked":"Save Picks"}
           </Btn>
@@ -2442,7 +2454,20 @@ export default function App() {
               <ScoringPanel phase={3}/>
               <FinalFourPicker actualFF={actualFF} ffPicks={picks.finalFour}
                 onChange={ff=>setPicks(p=>({...p,finalFour:ff}))}
-                locked={locks?.knockout} bracket={bracket} actualBracket={bracket}/>
+                locked={locks?.finalFour} bracket={bracket} actualBracket={bracket}/>
+              {!locks?.finalFour && (
+                <div style={{ position:"sticky", bottom:16, zIndex:10, marginTop:16, textAlign:"center" }}>
+                  <Btn onClick={handleSaveFinalFour} disabled={saving}
+                    bg={G4} color={WHT}
+                    style={{ padding:"14px 40px", fontSize:15, fontWeight:900,
+                      boxShadow:"0 4px 20px rgba(0,166,81,0.5)", borderRadius:12 }}>
+                    {saving ? "Saving..." : "💾 Save Final Four Picks"}
+                  </Btn>
+                  <div style={{ color:"rgba(255,255,255,0.4)", fontSize:11, marginTop:6 }}>
+                    Pick all four positions, then save
+                  </div>
+                </div>
+              )}
             </>
         )}
 
