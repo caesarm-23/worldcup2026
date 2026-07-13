@@ -275,7 +275,8 @@ function calcScore(picks, actualFF, liveStandings, bracket) {
   const g = liveG !== null ? liveG : 0;
   const { earned: k } = calcBracketScore(picks.bracket, bracket);
 
-  // Final Four — scoring by finishing position only (not SF picks)
+  // Final Four — EXACT placement only, all 4 positions scored independently
+  // 0pts if a team doesn't finish exactly where predicted — no auto-derivation
   let f = 0;
   const ff = picks.finalFour || {};
   const sfs = bracket?.sf || [];
@@ -288,24 +289,22 @@ function calcScore(picks, actualFF, liveStandings, bracket) {
   const consWinner  = bracket?.consolation?.[0]?.winner || null;
   const consLoser   = consWinner ? (bracket?.consolation?.[0]?.teamA===consWinner?bracket?.consolation?.[0]?.teamB:bracket?.consolation?.[0]?.teamA) : null;
 
-  // Champion — 15pts (picked via "champion" key)
+  // 1st — 15pts: champion pick must exactly match final winner
   if (finalWinner && ff.champion === finalWinner) f += 15;
 
-  // Runner-Up — 7pts (Final loser = whoever the player's champion pick lost to)
-  // The runner-up is whichever SF winner the player picked that isn't the champion
-  const playerRunnerUp = ff.champion
-    ? (ff.champion === (ff.sf1winner||null) ? (ff.sf2winner||null) : (ff.sf1winner||null))
+  // 2nd — 7pts: player's implied 2nd (whichever SF winner pick isn't their champion)
+  // must exactly match the actual runner-up (final loser)
+  const playerSecond = (ff.sf1winner && ff.sf2winner)
+    ? (ff.champion === ff.sf1winner ? ff.sf2winner : ff.sf1winner)
     : null;
-  if (finalLoser && playerRunnerUp === finalLoser) f += 7;
+  if (finalLoser && playerSecond === finalLoser) f += 7;
 
-  // 3rd place — 12pts (picked via "third" key)
+  // 3rd — 12pts: third pick must exactly match consolation winner
   if (consWinner && ff.third === consWinner) f += 12;
 
-  // 4th place — 5pts (consolation loser, auto-derived)
-  const playerFourth = ff.third
-    ? (ff.third === (ff.sf1winner ? (sfs[0]?.teamA===ff.sf1winner?sfs[0]?.teamB:sfs[0]?.teamA) : sf1Loser)
-        ? (ff.sf2winner ? (sfs[1]?.teamA===ff.sf2winner?sfs[1]?.teamB:sfs[1]?.teamA) : sf2Loser)
-        : (ff.sf1winner ? (sfs[0]?.teamA===ff.sf1winner?sfs[0]?.teamB:sfs[0]?.teamA) : sf1Loser))
+  // 4th — 5pts: implied 4th (SF loser who isn't third pick) must exactly match consolation loser
+  const playerFourth = (ff.third && sf1Loser && sf2Loser)
+    ? (ff.third === sf1Loser ? sf2Loser : sf1Loser)
     : null;
   if (consLoser && playerFourth === consLoser) f += 5;
 
