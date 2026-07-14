@@ -1025,8 +1025,14 @@ function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks,
         {(() => {
           const ff = p.finalFour || {};
           const sfs = bracket?.sf || [];
-          const sf1Loser = sfs[0]?.winner ? (sfs[0].teamA===sfs[0].winner?sfs[0].teamB:sfs[0].teamA) : null;
-          const sf2Loser = sfs[1]?.winner ? (sfs[1].teamA===sfs[1].winner?sfs[1].teamB:sfs[1].teamA) : null;
+          const sf1Teams = [sfs[0]?.teamA, sfs[0]?.teamB].filter(Boolean);
+          const sf2Teams = [sfs[1]?.teamA, sfs[1]?.teamB].filter(Boolean);
+          const sf1Loser = sfs[0]?.winner
+            ? (sfs[0].teamA===sfs[0].winner?sfs[0].teamB:sfs[0].teamA)
+            : (ff.sf1winner ? sf1Teams.find(t=>t!==ff.sf1winner) : null);
+          const sf2Loser = sfs[1]?.winner
+            ? (sfs[1].teamA===sfs[1].winner?sfs[1].teamB:sfs[1].teamA)
+            : (ff.sf2winner ? sf2Teams.find(t=>t!==ff.sf2winner) : null);
           const finalWinner = bracket?.final?.[0]?.winner || null;
           const finalLoser  = finalWinner ? (bracket?.final?.[0]?.teamA===finalWinner?bracket?.final?.[0]?.teamB:bracket?.final?.[0]?.teamA) : null;
           const consWinner  = bracket?.consolation?.[0]?.winner || null;
