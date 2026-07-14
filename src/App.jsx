@@ -1022,36 +1022,56 @@ function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks,
           </div>
         </div>
       )}
-        <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:20 }}>
-          {[
-            { key:"sf1winner", label:"SF1 Winner", pts:12 },
-            { key:"sf2winner", label:"SF2 Winner", pts:12 },
-            { key:"champion",  label:"🥇 Champion",  pts:15 },
-            { key:"third",     label:"🥉 3rd Place",  pts:12 },
-          ].map(({ key, label, pts }) => {
-            const team = p.finalFour?.[key];
-            const sfs = bracket?.sf || [];
-            let actualWinner = null;
-            if (key==="sf1winner") actualWinner = sfs[0]?.winner;
-            if (key==="sf2winner") actualWinner = sfs[1]?.winner;
-            if (key==="champion")  actualWinner = bracket?.final?.[0]?.winner;
-            if (key==="third")     actualWinner = bracket?.consolation?.[0]?.winner;
-            const correct = team && actualWinner && team===actualWinner;
-            const wrong   = team && actualWinner && team!==actualWinner;
-            return <div key={key} style={{ display:"flex", alignItems:"center", gap:10,
-              background:correct?"rgba(0,166,81,0.15)":wrong?"rgba(220,50,50,0.1)":CARD,
-              border:"1px solid " + (correct?G4:wrong?"rgba(220,50,50,0.4)":BORDER),
-              borderRadius:8, padding:"8px 12px" }}>
-              <span style={{ color:"rgba(255,255,255,0.5)", fontSize:11, width:90, flexShrink:0 }}>{label}</span>
-              {team ? <>
-                <Dot team={team} size={8}/>
-                <span style={{ fontSize:12, color:WHT, flex:1 }}>{team}</span>
-                {correct && <span style={{ fontSize:10, color:G4, fontWeight:800 }}>✓ +{pts}pts</span>}
-                {wrong   && <span style={{ fontSize:10, color:"#ff5252" }}>✗</span>}
-              </> : <span style={{ color:"rgba(255,255,255,0.2)", fontSize:11 }}>Not picked</span>}
-            </div>;
-          })}
-        </div>
+        {(() => {
+          const ff = p.finalFour || {};
+          const sfs = bracket?.sf || [];
+          const sf1Loser = sfs[0]?.winner ? (sfs[0].teamA===sfs[0].winner?sfs[0].teamB:sfs[0].teamA) : null;
+          const sf2Loser = sfs[1]?.winner ? (sfs[1].teamA===sfs[1].winner?sfs[1].teamB:sfs[1].teamA) : null;
+          const finalWinner = bracket?.final?.[0]?.winner || null;
+          const finalLoser  = finalWinner ? (bracket?.final?.[0]?.teamA===finalWinner?bracket?.final?.[0]?.teamB:bracket?.final?.[0]?.teamA) : null;
+          const consWinner  = bracket?.consolation?.[0]?.winner || null;
+          const consLoser   = consWinner ? (bracket?.consolation?.[0]?.teamA===consWinner?bracket?.consolation?.[0]?.teamB:bracket?.consolation?.[0]?.teamA) : null;
+
+          // Derive all 4 placements from picks
+          const pick1 = ff.champion || null;
+          const pick2 = (ff.sf1winner && ff.sf2winner)
+            ? (ff.champion === ff.sf1winner ? ff.sf2winner : ff.sf1winner)
+            : null;
+          const pick3 = ff.third || null;
+          const pick4 = (ff.third && sf1Loser && sf2Loser)
+            ? (ff.third === sf1Loser ? sf2Loser : sf1Loser)
+            : null;
+
+          const placements = [
+            { place:"🥇 1st", team:pick1, actual:finalWinner,  pts:15 },
+            { place:"🥈 2nd", team:pick2, actual:finalLoser,   pts:7  },
+            { place:"🥉 3rd", team:pick3, actual:consWinner,   pts:12 },
+            { place:"4th",   team:pick4, actual:consLoser,    pts:5  },
+          ];
+
+          return <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:20 }}>
+            {placements.map(({ place, team, actual, pts }) => {
+              const correct = team && actual && team === actual;
+              const wrong   = team && actual && team !== actual;
+              return <div key={place} style={{
+                display:"flex", alignItems:"center", gap:10,
+                background: correct?"rgba(0,166,81,0.15)":wrong?"rgba(220,50,50,0.1)":CARD,
+                border:"1px solid "+(correct?G4:wrong?"rgba(220,50,50,0.4)":BORDER),
+                borderRadius:8, padding:"9px 12px"
+              }}>
+                <span style={{ fontWeight:800, fontSize:13, width:36, flexShrink:0,
+                  color: place.includes("1st")?GLD:place.includes("2nd")?"#C0C0C0":place.includes("3rd")?"#b39ddb":"rgba(255,255,255,0.4)"
+                }}>{place}</span>
+                {team ? <>
+                  <Dot team={team} size={8}/>
+                  <span style={{ fontSize:13, fontWeight:600, color:WHT, flex:1 }}>{team}</span>
+                  {correct && <span style={{ fontSize:10, color:G4, fontWeight:800 }}>✓ +{pts}pts</span>}
+                  {wrong   && <span style={{ fontSize:10, color:"#ff5252" }}>✗</span>}
+                </> : <span style={{ color:"rgba(255,255,255,0.2)", fontSize:11, flex:1 }}>Not picked</span>}
+              </div>;
+            })}
+          </div>;
+        })()}
       </>}
     </div>;
   }
