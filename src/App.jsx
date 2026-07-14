@@ -1044,11 +1044,17 @@ function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks,
             ? (ff.champion === ff.sf1winner ? ff.sf2winner : ff.sf1winner)
             : null;
           const pick3 = ff.third || null;
-          // 4th = the SF loser that isn't picked as 3rd
-          const sfLosers = [sf1Loser, sf2Loser].filter(Boolean);
-          const pick4 = pick3 && sfLosers.length === 2
-            ? sfLosers.find(t => t !== pick3) || null
-            : sfLosers.length === 1 ? sfLosers[0] : null;
+          // 4th = the implied consolation loser
+          // SF losers = the two teams that lost their SFs
+          // Use real results if available, otherwise use player's own SF picks to derive
+          const impliedSF1Loser = sf1Loser || (ff.sf1winner
+            ? sf1Teams.find(t => t !== ff.sf1winner) : null);
+          const impliedSF2Loser = sf2Loser || (ff.sf2winner
+            ? sf2Teams.find(t => t !== ff.sf2winner) : null);
+          const allSFLosers = [impliedSF1Loser, impliedSF2Loser].filter(Boolean);
+          const pick4 = pick3 && allSFLosers.length > 0
+            ? allSFLosers.find(t => t !== pick3) || null
+            : null;
 
           const placements = [
             { place:"🥇 1st", team:pick1, actual:finalWinner,  pts:15 },
@@ -2544,4 +2550,3 @@ export default function App() {
     </div>
   </div>;
 }
-// Tue Jul 14 17:30:56 CDT 2026
