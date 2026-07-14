@@ -1044,9 +1044,11 @@ function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks,
             ? (ff.champion === ff.sf1winner ? ff.sf2winner : ff.sf1winner)
             : null;
           const pick3 = ff.third || null;
-          const pick4 = (ff.third && sf1Loser && sf2Loser)
-            ? (ff.third === sf1Loser ? sf2Loser : sf1Loser)
-            : null;
+          // 4th = the SF loser that isn't picked as 3rd
+          const sfLosers = [sf1Loser, sf2Loser].filter(Boolean);
+          const pick4 = pick3 && sfLosers.length === 2
+            ? sfLosers.find(t => t !== pick3) || null
+            : sfLosers.length === 1 ? sfLosers[0] : null;
 
           const placements = [
             { place:"🥇 1st", team:pick1, actual:finalWinner,  pts:15 },
