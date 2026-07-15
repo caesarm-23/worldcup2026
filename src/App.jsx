@@ -1040,21 +1040,29 @@ function Leaderboard({ entries, myName, actualFF, liveStandings, bracket, locks,
 
           // Derive all 4 placements from picks
           const pick1 = ff.champion || null;
+          // 2nd = SF winner that isn't champion
           const pick2 = (ff.sf1winner && ff.sf2winner)
             ? (ff.champion === ff.sf1winner ? ff.sf2winner : ff.sf1winner)
             : null;
           const pick3 = ff.third || null;
-          // 4th = the implied consolation loser
-          // SF losers = the two teams that lost their SFs
-          // Use real results if available, otherwise use player's own SF picks to derive
-          const impliedSF1Loser = sf1Loser || (ff.sf1winner
-            ? sf1Teams.find(t => t !== ff.sf1winner) : null);
-          const impliedSF2Loser = sf2Loser || (ff.sf2winner
-            ? sf2Teams.find(t => t !== ff.sf2winner) : null);
-          const allSFLosers = [impliedSF1Loser, impliedSF2Loser].filter(Boolean);
-          const pick4 = pick3 && allSFLosers.length > 0
-            ? allSFLosers.find(t => t !== pick3) || null
-            : null;
+          // Consolation match is always: SF1 loser vs SF2 loser
+          // SF1 loser = team that lost SF1 (France, since Spain won SF1)
+          // SF2 loser = team that lost SF2 (derived from player's sf2winner pick)
+          // 4th = consolation loser = whichever consolation team isn't picked as 3rd
+          const impliedSF1Loser = sf1Loser
+            || (ff.sf1winner ? sf1Teams.find(t => t !== ff.sf1winner) : null);
+          const impliedSF2Loser = sf2Loser
+            || (ff.sf2winner ? sf2Teams.find(t => t !== ff.sf2winner) : null);
+          // 3rd must be one of the consolation teams (SF1 loser or SF2 loser)
+          // 4th is the other consolation team
+          // SF losers from player's OWN picks (not real results)
+          // SF1 loser = whoever they didn't pick as sf1winner
+          // SF2 loser = whoever they didn't pick as sf2winner
+          const playerSF1Loser = ff.sf1winner ? sf1Teams.find(t => t !== ff.sf1winner) : null;
+          const playerSF2Loser = ff.sf2winner ? sf2Teams.find(t => t !== ff.sf2winner) : null;
+          const playerConsolationTeams = [playerSF1Loser, playerSF2Loser].filter(Boolean);
+          // 4th = the consolation team they didn't pick as 3rd
+          const pick4 = playerConsolationTeams.find(t => t !== pick3) || null;
 
           const placements = [
             { place:"🥇 1st", team:pick1, actual:finalWinner,  pts:15 },
