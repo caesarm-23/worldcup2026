@@ -1808,6 +1808,19 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, 
 
   const setWinner = async (roundKey, mi, winner) => {
     const next = JSON.parse(JSON.stringify(bracketState||{}));
+    // Consolation may not exist yet — initialise it from SF losers
+    if (roundKey === "consolation") {
+      if (!next.consolation) {
+        const sfs = next.sf || [];
+        const sf1L = sfs[0]?.winner ? (sfs[0].teamA===sfs[0].winner?sfs[0].teamB:sfs[0].teamA) : "";
+        const sf2L = sfs[1]?.winner ? (sfs[1].teamA===sfs[1].winner?sfs[1].teamB:sfs[1].teamA) : "";
+        next.consolation = [{ teamA: sf1L, teamB: sf2L, winner: null }];
+      }
+      next.consolation[mi].winner = winner;
+      setBracketState(next);
+      await save({ bracket: next });
+      return;
+    }
     if (!next[roundKey]?.[mi]) return;
     next[roundKey][mi].winner = winner;
     const propagated = propagateBracket(next);
@@ -2003,6 +2016,42 @@ function AdminPanel({ phase, actualFF, liveStandings, locks, bracket, onUpdate, 
             </div>
           </div>;
         })}
+
+        {/* Consolation match — 3rd place */}
+        {(()=>{
+          const sfs = bracketState?.sf || [];
+          const sf1Loser = sfs[0]?.winner ? (sfs[0].teamA===sfs[0].winner?sfs[0].teamB:sfs[0].teamA) : null;
+          const sf2Loser = sfs[1]?.winner ? (sfs[1].teamA===sfs[1].winner?sfs[1].teamB:sfs[1].teamA) : null;
+          if (!sf1Loser || !sf2Loser) return null;
+          const cons = bracketState?.consolation?.[0] || { teamA: sf1Loser, teamB: sf2Loser, winner: null };
+          const hasWinner = cons.winner && cons.winner !== "null";
+          return <div style={{ marginBottom:16 }}>
+            <div style={{ color:"rgba(255,255,255,0.5)", fontSize:11, fontWeight:700, marginBottom:8 }}>🥉 3rd Place Consolation</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              <div style={{ background:"rgba(0,0,0,0.25)", border:`1px solid ${hasWinner?GLD:BORDER}`,
+                borderRadius:8, padding:"8px 12px", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                <span style={{ color:"rgba(255,255,255,0.3)", fontSize:10, flexShrink:0 }}>3rd place:</span>
+                {[sf1Loser, sf2Loser].map(team=>(
+                  <button key={team} onClick={()=>setWinner("consolation",0,team)} style={{
+                    background:cons.winner===team?"rgba(255,215,0,0.2)":"rgba(255,255,255,0.07)",
+                    border:cons.winner===team?`1px solid ${GLD}`:`1px solid ${BORDER}`,
+                    borderRadius:6, padding:"5px 10px", cursor:"pointer",
+                    color:cons.winner===team?GLD:WHT,
+                    fontSize:11, fontWeight:cons.winner===team?700:400,
+                    fontFamily:"inherit", display:"flex", alignItems:"center", gap:4
+                  }}><Dot team={team} size={7}/>{team}{cons.winner===team&&" 🏆"}</button>
+                ))}
+                {hasWinner && (
+                  <button onClick={()=>setWinner("consolation",0,null)} style={{
+                    background:"rgba(220,50,50,0.15)", border:"1px solid rgba(220,50,50,0.4)",
+                    borderRadius:6, padding:"5px 8px", cursor:"pointer",
+                    color:"#ff8a80", fontSize:11, fontFamily:"inherit"
+                  }}>✕ clear</button>
+                )}
+              </div>
+            </div>
+          </div>;
+        })()}
       </div>
     )}
 
